@@ -1,0 +1,114 @@
+https://blog.teclado.com/how-to-use-pyenv-manage-python-versions/
+
+brew update
+brew install pyenv
+pyenv install --list
+pyenv install 3.11.0
+pyenv local 3.11
+pyenv exec python -v Python 3.11.0
+pyenv exec python -m venv .venv
+source .venv/bin/activate
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+sudo python get-pip.py
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+uvicorn main:app --reload
+
+https://jupyter.org/install
+python -m ipykernel install --user --name .venv
+jupyter notebook
+jupyter lab
+
+pipx install:
+https://pipx.pypa.io/stable/installation/
+brew install pipx
+pipx ensurepath
+
+poetry install:
+https://python-poetry.org/docs/
+pipx install poetry
+poetry init
+
+python-magic: requires => brew install libmagic /
+sudo apt-get install libmagic1
+https://pypi.org/project/python-magic/
+
+pytesseract: requires => brew install tesseract /
+sudo apt update && sudo apt upgrade
+sudo apt install tesseract-ocr
+sudo apt install libtesseract-dev
+
+pdf2image: requires => brew install poppler /
+sudo apt-get install -y poppler-utils
+Most distros ship with pdftoppm and pdftocairo.
+If they are not installed, refer to your package manager to install poppler-utils
+
+
+
+
+
+Serverless: https://github.com/zappa/Zappa?tab=readme-ov-file#installation-and-configuration
+zappa invoke dev main.handler
+zappa deploy dev
+zappa update dev
+zappa undeploy dev
+zappa tail dev
+
+other links:
+https://github.com/gitmurali/aws_snippets/blob/main/lambda/ec2/launch_ec2.py
+
+ECR:
+docker build -t fastapi-app .
+docker run -p 80:80 fastapi-app
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/projects/fastapi-app-repo
+docker tag fastapi-app:latest <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/projects/fastapi-app-repo:latest
+docker push <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/projects/fastapi-app-repo:latest
+
+
+Docker:
+docker exec -it mysql mysql -h mysql -u dev -pwipip db
+docker exec -it postgres psql -h localhost -U postgres -d db
+docker exec -it nextjs npx prisma db push
+docker exec -it nextjs pnpm seed
+docker exec -it nextjs /bin/sh
+docker compose up
+docker compose stop
+docker compose down
+docker rmi $(docker images -a -q)
+docker inspect mysql
+
+fix mysql external access:
+docker exec -it mysql mysql -h mysql -u dev -pwipip db
+UPDATE mysql.user SET host='%' WHERE user='<your-db-user-name>';
+FLUSH PRIVILEGES;
+SELECT host, user FROM mysql.user;
+
+examples:
+https://github.com/vercel/app-playground/blob/main/app/isr/%5Bid%5D/page.tsx
+
+{
+  "clientId": "uwHeNRtDwnhHbUinzjjYfXDT",
+  "secret": "M20tsWAA4fyMnxTN_4a5PMSgjf30eAIpUeFqcusSy2rEmsK.TRSyMA,R3nbueh,RbNG.FHNm7pvhhKJpOqtPyK_ebdoTdjj1kDEY_20NjmEopJQ.TEgJH6ig6frr,76F",
+  "token": "AstraCS:uwHeNRtDwnhHbUinzjjYfXDT:8fca5b9f7678f06e873a9c7637229b3cd861e2352627060d78c4dc5691c5182e"
+}
+
+db_token: AstraCS:GLrukCvslvLumzZnXpyEwQuv:2606f9408247c20c67c5b8a7a6449160a029aa214b8d29eb29d850645d325fa3
+
+db_api_endpoint: "https://0888d0c6-c3db-4c07-b1a0-2c6bf4fcffaa-us-east-2.apps.astra.datastax.com"
+
+from astrapy import DataAPIClient
+
+# Initialize the client
+client = DataAPIClient("YOUR_TOKEN")
+db = client.get_database_by_api_endpoint(
+  "https://0888d0c6-c3db-4c07-b1a0-2c6bf4fcffaa-us-east-2.apps.astra.datastax.com"
+)
+
+print(f"Connected to Astra DB: {db.list_collection_names()}")
+
+alembic:
+alembic init alembic
+alembic list_templates
+alembic init --template async ./alembic
+alembic revision  -m "Initial migration"
+alembic upgrade head

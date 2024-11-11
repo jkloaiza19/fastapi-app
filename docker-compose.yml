@@ -1,0 +1,85 @@
+services:
+
+  fastapi_postgres_db:
+    image: postgres:latest
+    container_name: fastapi_postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fastapi_db
+    ports:
+      - "5435:5432"
+    expose:
+      - "5435"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fastapi
+      - default
+
+
+  redis_server:
+    container_name: redis_server
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - redis_data:/var/redis:/root/redis
+      - redis_data:/var/redis.conf:/usr/local/etc/redis/redis.conf
+    environment:
+      - REDIS_PASSWORD=redis1234@
+      - REDIS_PORT=6379
+      - REDIS_DATABASES=16
+    networks:
+      - fastapi
+      - default
+
+#  api:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: fastapi_app
+#     restart: on-failure
+#     ports:
+#       - "8000:8000"
+#     expose:
+#       - "8000"
+#     env_file:
+#       - .env
+#     volumes:
+#       - .:/usr/src/app
+#     command: uvicorn main:app --reload
+#     depends_on:
+#       fastapi_postgres_db:
+#         condition: service_healthy
+#         restart: true
+#       redis_server:
+#         condition: service_healthy
+#         restart: true
+#     networks:
+#       - fastapi
+#       - default
+
+networks:
+  fastapi:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
