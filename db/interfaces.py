@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncEngine
+from typing import AsyncGenerator, Any
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 
 class DataBaseSessionInterface(ABC):
     @abstractmethod
-    async def get_session(self) -> AsyncGenerator:
+    async def get_session(self) -> AsyncSession:
         pass
 
 
@@ -30,7 +30,34 @@ class DataBaseEngineInterface(ABC):
 
 class DeclarativeBaseInterface(ABC):
     @abstractmethod
-    def get_declarative_base(self):
+    def get_model_base(self):
         pass
 
 
+class DataBaseRepositoryInterface(ABC):
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    @abstractmethod
+    async def get_all(self, limit: int = 0, offset: int = 0):
+        pass
+
+    @abstractmethod
+    async def find_many(self, **kwargs):
+        pass
+
+    @abstractmethod
+    async def find_unique(self, **kwargs):
+        pass
+
+    @abstractmethod
+    async def find_by_query(self, query: str):
+        pass
+
+    @abstractmethod
+    async def create_one(self, resource):
+        pass
+
+    @abstractmethod
+    async def update_one(self, resource):
+        pass

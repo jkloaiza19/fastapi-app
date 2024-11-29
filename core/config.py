@@ -7,7 +7,6 @@ from pydantic import EmailStr
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # Use top level .env file (one level above ./backend/)
         env_file=".env",
         env_ignore_empty=True,
         extra="ignore",
@@ -49,5 +48,23 @@ class Settings(BaseSettings):
     def is_local_environment(self) -> bool:
         return self.ENVIRONMENT == "local"
 
+    # def load_secrets_from_aws(self, secret_name: str):
+    #     if self.ENVIRONMENT == "production":
+    #         session = boto3.session.Session()
+    #         client = session.client(
+    #             service_name="secretsmanager",
+    #             region_name=self.AWS_REGION,
+    #         )
+    #         try:
+    #             response = client.get_secret_value(SecretId=secret_name)
+    #             secret_dict = json.loads(response["SecretString"])
+    #             for key, value in secret_dict.items():
+    #                 if hasattr(self, key):
+    #                     setattr(self, key, value)
+    #         except Exception as e:
+    #             raise RuntimeError(f"Failed to load secrets: {e}")
+
 
 settings = Settings()
+# if settings.ENVIRONMENT == "production":
+#     settings.load_secrets_from_aws("secret-name")

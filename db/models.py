@@ -6,7 +6,7 @@ from sqlalchemy.sql import func
 from db.database import get_declarative_base
 from abc import ABC, abstractmethod
 
-Base = get_declarative_base()
+Base = get_declarative_base().get_model_base()
 
 
 class ModelBaseInterface(ABC):
@@ -15,12 +15,7 @@ class ModelBaseInterface(ABC):
         pass
 
 
-class ModelBase(ModelBaseInterface, Base):
-    def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
-        return {c.name: setattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
-
-
-class User(ModelBase):
+class User(Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -41,10 +36,10 @@ class User(ModelBase):
     comments: Mapped[List["Comment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
-        return super().to_dict(self, exclude)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
 
 
-class Post(ModelBase):
+class Post(Base):
     __tablename__: str = "post"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -63,10 +58,10 @@ class Post(ModelBase):
     comments: Mapped[List["Comment"]] = relationship(back_populates="post", cascade="all, delete-orphan")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
-        return super().to_dict(self, exclude)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
 
 
-class Like(ModelBase):
+class Like(Base):
     __tablename__ = "likes"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -82,10 +77,10 @@ class Like(ModelBase):
     post: Mapped["Post"] = relationship(back_populates="likes")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
-        return super().to_dict(self, exclude)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
 
 
-class Comment(ModelBase):
+class Comment(Base):
     __tablename__ = "comments"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -102,4 +97,4 @@ class Comment(ModelBase):
     post: Mapped["Post"] = relationship(back_populates="comments")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
-        return super().to_dict(self, exclude)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
