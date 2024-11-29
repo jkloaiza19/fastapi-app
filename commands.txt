@@ -90,15 +90,7 @@ SELECT host, user FROM mysql.user;
 examples:
 https://github.com/vercel/app-playground/blob/main/app/isr/%5Bid%5D/page.tsx
 
-{
-  "clientId": "uwHeNRtDwnhHbUinzjjYfXDT",
-  "secret": "M20tsWAA4fyMnxTN_4a5PMSgjf30eAIpUeFqcusSy2rEmsK.TRSyMA,R3nbueh,RbNG.FHNm7pvhhKJpOqtPyK_ebdoTdjj1kDEY_20NjmEopJQ.TEgJH6ig6frr,76F",
-  "token": "AstraCS:uwHeNRtDwnhHbUinzjjYfXDT:8fca5b9f7678f06e873a9c7637229b3cd861e2352627060d78c4dc5691c5182e"
-}
 
-db_token: AstraCS:GLrukCvslvLumzZnXpyEwQuv:2606f9408247c20c67c5b8a7a6449160a029aa214b8d29eb29d850645d325fa3
-
-db_api_endpoint: "https://0888d0c6-c3db-4c07-b1a0-2c6bf4fcffaa-us-east-2.apps.astra.datastax.com"
 
 from astrapy import DataAPIClient
 
