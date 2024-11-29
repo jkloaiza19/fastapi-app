@@ -1,6 +1,8 @@
 from openai import OpenAI, APIError
 from openai.types.chat import ChatCompletionMessage
+from openai import APIError
 from fastapi import HTTPException, status
+from typing import AsyncGenerator
 from core.logger import get_logger
 from core.config import settings
 from services.http.http_client import HttpClient
@@ -27,7 +29,7 @@ class ChatCompletion(OpenAIInterface):
         self.system_role = "You are a helpful and friendly assistant."
         self.headers = {"Authorization": f"Bearer {self.api_key}"}
 
-    async def get_model_response(self, prompt: str) -> ChatCompletionMessage:
+    async def get_model_response(self, prompt: str) -> dict:
         """Fetch chat completion response from OpenAI API."""
         try:
             data = {
@@ -54,11 +56,19 @@ class ChatCompletion(OpenAIInterface):
             )
 
 
-def get_chat_completion_service() -> OpenAIInterface:
-    http_client = HttpClient()
-    return ChatCompletion(
-        http_client=http_client,
-    )
+def get_chat_completion_service() -> AsyncGenerator[OpenAIInterface, None]:
+    try:
+        http_client = HttpClient()
+        chat_completion = ChatCompletion(
+            http_client=http_client,
+        )
+        yield chat_completion
+    except APIError as e:
+        logger.error(str(e))
+        raise e
+    finally:
+        chat_completion
+
 
 
 def get_chat_completion(http_client: HttpClient) -> ChatCompletion:

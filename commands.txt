@@ -14,6 +14,10 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 uvicorn main:app --reload
 
+poetry install --no-root --only main --no-ansi
+poetry run uvicorn main:app --reload
+
+
 https://jupyter.org/install
 python -m ipykernel install --user --name .venv
 jupyter notebook
@@ -112,3 +116,12 @@ alembic list_templates
 alembic init --template async ./alembic
 alembic revision  -m "Initial migration"
 alembic upgrade head
+
+Git:
+echo "# fastapi-app" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin git@github.com:jkloaiza19/fastapi-app.git
+git push -u origin main

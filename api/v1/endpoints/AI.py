@@ -14,4 +14,4 @@ router = APIRouter()
 
 @router.post("/chat-completion", status_code=200, response_model=ChatCompletionMessage)
 async def chat_completion(body: ChatCompletionRequest, chat_completion_client: chat_completion_dep):
-    return await chat_completion_client.get_chat_completion(prompt=body.prompt)
+    return await chat_completion_client.get_model_response(prompt=body.prompt)

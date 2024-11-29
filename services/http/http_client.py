@@ -4,6 +4,7 @@ from httpx import AsyncClient, HTTPStatusError, Timeout, Limits, RequestError, R
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from typing import Dict, Any, Optional, AsyncGenerator
 from abc import ABC, abstractmethod
+from fastapi import HTTPException, status
 
 logger = get_logger(__name__)
 
@@ -27,7 +28,7 @@ class HttpClientInterface(ABC):
         pass
 
 
-class RetryDecorator:
+class RetryDecoratorWrapper:
     @staticmethod
     def get_retry_decorator():
         """Returns a retry decorator with a consistent retry strategy."""
@@ -39,8 +40,9 @@ class RetryDecorator:
 
 
 class HttpClient(HttpClientInterface, ABC):
-    def __init__(self):
-        self.async_client = AsyncClient(timeout=Timeout(10.0), limits=Limits(max_connections=10))
+    def __init__(self, client: AsyncClient):
+        # self.async_client = client or AsyncClient(timeout=Timeout(10.0), limits=Limits(max_connections=10))
+        self.async_client = client
         self.common_headers = {"Content-Type": "application/json"}
 
     def client(self):
@@ -59,7 +61,7 @@ class HttpClient(HttpClientInterface, ABC):
             logger.error(f"Error decoding JSON response: {str(e)}")
             raise e
 
-    @RetryDecorator.get_retry_decorator()
+    @RetryDecoratorWrapper.get_retry_decorator()
     async def post_request(
             self,
             url: str,
@@ -82,7 +84,7 @@ class HttpClient(HttpClientInterface, ABC):
             if isinstance(self.async_client, AsyncClient):
                 await self.async_client.aclose()
 
-    @RetryDecorator.get_retry_decorator()
+    @RetryDecoratorWrapper.get_retry_decorator()
     async def get_request(
             self,
             url: str,
@@ -104,16 +106,38 @@ class HttpClient(HttpClientInterface, ABC):
                 await self.async_client.aclose()
 
 
+class HttpClientSingleton:
+    """Ensures that only one instance of HttpClient and its underlying AsyncClient is
+    created and reused across the application"""
+    _instance: Optional[HttpClient] = None
+    _async_client: Optional[AsyncClient] = None
+
+    @classmethod
+    def get_instance(cls) -> HttpClient:
+        if cls._instance is None:
+            if cls._async_client is None:
+                cls._async_client = AsyncClient(
+                    timeout=Timeout(30.0),
+                    limits=Limits(max_connections=100, max_keepalive_connections=10),
+                )
+            cls._instance = HttpClient(client=cls._async_client)
+        return cls._instance
+
+    @classmethod
+    async def close_instance(cls):
+        """Closes the AsyncClient instance."""
+        if cls._async_client:
+            await cls._async_client.aclose()
+            cls._async_client = None
+        cls._instance = None
+
+
 async def get_http_client() -> AsyncGenerator[HttpClient, None]:
-    async_client = AsyncClient(
-        timeout=Timeout(30.0),
-        limits=Limits(max_connections=100, max_keepalive_connections=10)
-    )
-    http_client = HttpClient(client=async_client)
+    http_client = HttpClientSingleton.get_instance()
     try:
         yield http_client
     except HTTPStatusError as e:
         logger.error(f"{str(e)}")
-        raise e
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{str(e)}")
     finally:
-        await async_client.aclose()
+        await HttpClientSingleton.close_instance()
