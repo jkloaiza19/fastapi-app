@@ -30,7 +30,7 @@ phases:
       - echo "$SECRETS_JSON" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' > .env
 
       - echo Generating environment variables for task definition...
-      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\": \"\(.value)\"}") | join(",")' > env_variables.json
+      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\":\"\(.value)\"}") | join(",")' > env_variables.json
 
       - echo "Modifying task definition with environment variables..."
       - jq ".containerDefinitions[0].environment = $(cat env_variables.json)" task-definition-template.json > imagedefinitions.json
