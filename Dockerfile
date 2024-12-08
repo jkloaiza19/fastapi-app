@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
+
 # Add Poetry to PATH
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -32,26 +33,17 @@ COPY pyproject.toml poetry.lock ./
 # Install project dependencies in the virtual environment created by Poetry
 RUN poetry install --no-root --only main --no-ansi
 
+COPY . .
+
 FROM python:3.11-slim AS runtime
+
+WORKDIR /app
 
 # Copy Poetry environment from the builder stage
 COPY --from=builder /app /app
 
-WORKDIR /app
-
-COPY . .
-
 # Expose the port FastAPI will run on
 EXPOSE 8000
-
-# Set the entrypoint script to handle Alembic migrations
-#COPY scripts/db_init.sh /scripts/db_init.sh
-RUN chmod +x /scripts/db_init.sh
-
-RUN sh -c "./scripts/db_init.sh"
-
-# Set the entrypoint to run the entrypoint.sh script
-#ENTRYPOINT ["/app/scripts/db_init.sh"]
 
 # Define the startup command
 CMD ["poetry", "run", "uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
