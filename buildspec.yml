@@ -32,11 +32,11 @@ phases:
       - echo Generating environment variables for task definition...
       - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\":\"\(.value)\"}") | join(",")' > env_variables.json
 
-      - echo "Modifying task definition with environment variables..."
-      #- jq ".containerDefinitions[0].environment = $(cat env_variables.json)" task-definition-template.json > imagedefinitions.json
+     # - echo "Modifying task definition with environment variables..."
+     # - jq ".containerDefinitions[0].environment = $(cat env_variables.json)" task-definition-template.json > imagedefinitions.json
 
-      - echo "Validating modified task definition..."
-      - jq empty imagedefinitions.json || { echo "Invalid task definition JSON"; exit 1; }
+     # - echo "Validating modified task definition..."
+     # - jq empty imagedefinitions.json || { echo "Invalid task definition JSON"; exit 1; }
 
       - echo "Installing project dependencies..."
       - poetry install --no-root --no-dev
