@@ -12,7 +12,7 @@ phases:
       docker: 19
     commands:
       - echo "Installing system dependencies..."
-      - yum install -y git postgresql-devel gcc jq
+      - yum install -y git postgresql-devel gcc jq openssl-devel
       - echo "Installing Poetry..."
       - curl -sSL https://install.python-poetry.org | python3 -
       - export PATH="$HOME/.local/bin:$PATH"
