@@ -24,7 +24,7 @@ phases:
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
       - echo Get secrets...
-      - export SECRETS_JSON=$(aws secretsmanager get-secret-value --secret-id SECRETS_MANAGER_ID --query SecretString --output text)
+      - export SECRETS_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRETS_MANAGER_ID --query SecretString --output text)
 
       - echo generate .env...
       - echo "$SECRETS_JSON" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' > .env
