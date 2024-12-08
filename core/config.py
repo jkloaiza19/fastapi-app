@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     ASTRA_DB_NAMESPACE: Optional[str] = ""
     ASTRA_DB_TOKEN: Optional[str] = ""
     ASTRA_DB_ENDPOINT: Optional[str] = ""
+    REDIS_URL: Optional[str] = "redis://localhost:6379"
+    OPENSEARCH_HOST: Optional[str] = ""
+    OPENSEARCH_PORT: Optional[int] = 9200
+    OPEN_SEARCH_USERNAME: Optional[str] = ""
+    OPENSEARCH_INITIAL_ADMIN_PASSWORD: Optional[str] = ""
 
     def is_local_environment(self) -> bool:
         return self.ENVIRONMENT == "local"

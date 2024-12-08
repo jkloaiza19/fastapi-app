@@ -1,13 +1,10 @@
 from abc import ABC, abstractmethod
-from enum import Enum
 from asyncio import to_thread
 from typing import Optional, AsyncGenerator
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 import mimetypes
-from boto3 import client
 from boto3.exceptions import Boto3Error
-from botocore.config import Config
 from core.config import settings
 from core.logger import get_logger
 from services.aws.aws_client import AWSClient, AwsServiceEnum
@@ -135,7 +132,7 @@ def get_aws_s3_client() -> AsyncGenerator[AWSClientS3Interface, None]:
     try:
         yield s3_client
     except Boto3Error as e:
-        logger.error(f"Error getting file from S3: {str(e)}")
+        logger.error(f"Error getting S3 client: {str(e)}")
         raise e
     finally:
         s3_client.close()

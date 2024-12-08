@@ -1,15 +1,8 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
-class UserBase(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class AuthBase(BaseModel):
     username: str = Field(min_length=5, max_length=20)
-    email: str = Field(pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
-
-
-class UserRequest(UserBase):
     password: str = Field(
         min_length=8,
         max_length=20,
@@ -30,7 +23,35 @@ class UserRequest(UserBase):
         return value
 
 
-class UserResponse(UserBase):
-    is_confirmed: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+class SignUpRequest(AuthBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    email: str = Field(pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+
+
+class SignInRequest(AuthBase):
+    model_config = ConfigDict(from_attributes=True)
+    pass
+
+
+class SignOutRequest(BaseModel):
+    token: str
+
+
+class TokenResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_token: str
+    access_token: str
+    refresh_token: str
+    token_type: str
+    expires_in: int
+    expires_in: int
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class ConfirmSignUpRequest(BaseModel):
+    username: str
