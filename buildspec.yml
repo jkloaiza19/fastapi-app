@@ -9,7 +9,7 @@ phases:
   install:
     runtime-versions:
       python: 3.11
-      docker: 19
+      docker: 23
     commands:
       - echo "Installing system dependencies..."
       - yum install -y git postgresql-devel gcc jq openssl-devel
