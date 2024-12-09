@@ -26,11 +26,15 @@ phases:
       - echo Get secrets...
       - export SECRETS_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRETS_MANAGER_ID --query SecretString --output text)
 
-      - echo generate .env...
+      - echo generating .env...
       - echo "$SECRETS_JSON" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' > .env
 
-      - echo Generating environment variables for task definition...
+      - echo generating environment variables for task definition...
       - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\":\"\(.value)\"}") | join(",")' > env_variables.json
+
+      - echo generating image tag
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
 
      # - echo "Modifying task definition with environment variables..."
      # - jq ".containerDefinitions[0].environment = $(cat env_variables.json)" task-definition-template.json > imagedefinitions.json
@@ -38,31 +42,36 @@ phases:
      # - echo "Validating modified task definition..."
      # - jq empty imagedefinitions.json || { echo "Invalid task definition JSON"; exit 1; }
 
-      - echo "Installing project dependencies..."
-      - poetry install --no-root --no-dev
+      - echo "Installing project dependencies nad run migrations..."
+      - chmod +x scripts/init_db.sh
+      - ./scripts/init_db.sh
+     # - poetry install --no-root --no-dev
 
-      - echo "Verifying dependencies..."
-      - poetry show
+     # - echo "Verifying dependencies..."
+     # - poetry show
 
-      - echo "Running Alembic migrations..."
-      - poetry run alembic upgrade head
+     # - echo "Running Alembic migrations..."
+     # - poetry run alembic upgrade head
 
   build:
     commands:
       - echo Building the Docker image...
-      - docker build -t fastapi-app .
-      - docker tag fastapi-app:$CODEBUILD_RESOLVED_SOURCE_VERSION $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fastapi-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker build --tag=$REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
 
   post_build:
     commands:
       - echo Pushing the Docker image to Amazon ECR...
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fastapi-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
 
       - echo Updating ECS service...
       - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment
 
       - echo Writing image definitions file...
-      - printf '[{"name":"container-name","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fastapi-app:$CODEBUILD_RESOLVED_SOURCE_VERSION > imagedefinitions.json
+#      - printf '[{"name":"%s","imageUri":"%s"}]' $ECS_SERVICE $REPOSITORY_URI:latest > imagedefinitions.json
+      - printf '[{"name":"%s","imageUri":"%s"}]' "$ECS_SERVICE" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
+
 
 artifacts:
-  files: imagedefinitions.json
+  files:
+    - imagedefinitions.json
