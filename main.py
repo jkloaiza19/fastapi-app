@@ -8,6 +8,7 @@ from api.v1.main import v1_router
 from core.middlewares.request_logger_middleware import RequestLoggingMiddleware
 # Middlewares
 from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
 
 logger = get_logger(__name__)
 
@@ -41,3 +42,6 @@ app.add_middleware(
 @app.get("/healthcheck")
 def init():
     return {"result": "Success"}
+
+
+handler = Mangum(app, lifespan="off")

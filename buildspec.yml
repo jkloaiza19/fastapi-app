@@ -3,23 +3,49 @@ version: 0.2
 env:
   variables:
     DB_URL: "postgresql+asyncpg://user:password@db-host/dbname"  # Replace with your actual DB URL
+    SECRETS_ID: "fastapi-dev-secrets"
 
 phases:
+  install:
+    runtime-versions:
+      python: 3.11
+      docker: 23
+    commands:
+      - echo "Installing system dependencies..."
+      - yum install -y git postgresql-devel gcc jq openssl-devel
+      - echo "Installing Poetry..."
+      - curl -sSL https://install.python-poetry.org | python3 -
+      - export PATH="$HOME/.local/bin:$PATH"
+      - poetry --version
+
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
-      - aws --version
-      - echo $AWS_ACCOUNT_ID
-      - echo $AWS_DEFAULT_REGION
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-      - echo Installing dependencies for entrypoint script...
-      - pip install poetry
-      - poetry install
+      - echo Get secrets...
+      - export SECRETS_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRETS_MANAGER_ID --query SecretString --output text)
 
-      - echo Running entrypoint script for database initialization and migrations...
-      - chmod +x entrypoint.sh
-      - DATABASE_URL=$DB_URL ./entrypoint.sh
+      - echo generate .env...
+      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' > .env
+
+      - echo Generating environment variables for task definition...
+      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\":\"\(.value)\"}") | join(",")' > env_variables.json
+
+     # - echo "Modifying task definition with environment variables..."
+     # - jq ".containerDefinitions[0].environment = $(cat env_variables.json)" task-definition-template.json > imagedefinitions.json
+
+     # - echo "Validating modified task definition..."
+     # - jq empty imagedefinitions.json || { echo "Invalid task definition JSON"; exit 1; }
+
+      - echo "Installing project dependencies..."
+      - poetry install --no-root --no-dev
+
+      - echo "Verifying dependencies..."
+      - poetry show
+
+      - echo "Running Alembic migrations..."
+      - poetry run alembic upgrade head
 
   build:
     commands:
@@ -31,6 +57,9 @@ phases:
     commands:
       - echo Pushing the Docker image to Amazon ECR...
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fastapi-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
+
+      - echo Updating ECS service...
+      - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment
 
       - echo Writing image definitions file...
       - printf '[{"name":"container-name","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fastapi-app:$CODEBUILD_RESOLVED_SOURCE_VERSION > imagedefinitions.json
