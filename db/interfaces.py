@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Any
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from services.redis.redis_client_interface import RedisClientInterface
 
 
 class DataBaseSessionInterface(ABC):
@@ -13,6 +14,10 @@ class DataBaseSessionInterface(ABC):
 class DataBaseInitializerInterface(ABC):
     @abstractmethod
     async def initialize_database(self):
+        pass
+
+    @abstractmethod
+    async def close_database(self):
         pass
 
 
@@ -35,8 +40,6 @@ class DeclarativeBaseInterface(ABC):
 
 
 class DataBaseRepositoryInterface(ABC):
-    def __init__(self, session: AsyncSession):
-        self.session = session
 
     @abstractmethod
     async def get_all(self, limit: int = 0, offset: int = 0):
@@ -47,7 +50,7 @@ class DataBaseRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def find_unique(self, **kwargs):
+    async def find_unique(self, redis: Optional[RedisClientInterface], **kwargs):
         pass
 
     @abstractmethod

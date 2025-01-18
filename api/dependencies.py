@@ -1,8 +1,10 @@
 from http.client import HTTPException
+from fastapi.security import OAuth2PasswordBearer
 
 from fastapi import Depends
 from typing import Annotated, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from services.http.http_client import get_http_client, HttpClient
 from db.database import \
     get_database_initializer,\
@@ -18,17 +20,41 @@ from db.interfaces import DataBaseRepositoryInterface
 from services.AI.interfaces import OpenAIInterface
 from services.AI.chat_bot import ChatCompletion
 from core.logger import get_logger
+from core.config import settings
 
 # AWS
 from services.aws.s3_client import get_aws_s3_client, AWSClientS3Interface
+from services.aws.cognito import get_aws_cognito_client, CognitoClientInterface
+
+
+# Redis
+from services.redis.redis_client import RedisClient, get_redis_client
+from services.redis.redis_client_interface import RedisClientInterface
+
+# Email
+from services.email.email_client import EmailClientInterface, get_email_client
+
+# Endpoints
+from services.auth import get_auth_client, AuthClientInterface
+
+# Utils
+from utils.jwt_util import JWTUtilInterface, get_jwt_util
 
 logger = get_logger(__name__)
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+auth_dependency = Annotated[str, Depends(oauth2_scheme)]
 
 http_client_dep = Annotated[HttpClient, Depends(get_http_client)]
 database_initializer_dep = Annotated[DataBaseInitializerInterface, Depends(get_database_initializer)]
 
 # AWS Dependencies
 aws_s3_client_dep = Annotated[AWSClientS3Interface, Depends(get_aws_s3_client)]
+aws_cognito_client_dep = Annotated[CognitoClientInterface, Depends(get_aws_cognito_client)]
+
+# Endpoints Dependencies
+auth_dependency = Annotated[AuthClientInterface, Depends(get_auth_client)]
 
 
 # AI Dependencies
@@ -60,3 +86,13 @@ async def get_user_repository(db_session: database_session_dep) -> AsyncGenerato
     yield user_repository
 
 user_repository_dep = Annotated[DataBaseRepositoryInterface, Depends(get_user_repository)]
+
+# Redis
+redis_dep = Annotated[RedisClientInterface, Depends(get_redis_client)]
+
+# Email
+email_client_dep = Annotated[EmailClientInterface, Depends(get_email_client)]
+
+# JWT
+jwt_util_dep = Annotated[JWTUtilInterface, Depends(get_jwt_util)]
+

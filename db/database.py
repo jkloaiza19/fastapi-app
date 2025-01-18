@@ -25,7 +25,7 @@ wait_seconds = 10
 
 @dataclass
 class DataBaseEngine(DataBaseEngineInterface):
-    engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
+    engine = create_async_engine(settings.ASYNC_DATABASE_URL)
 
     def get_engine(self) -> AsyncEngine:
         return self.engine
@@ -70,6 +70,9 @@ class DataBaseInitializer(DataBaseInitializerInterface):
         except Exception as e:
             logger.error("Failed to initialize database", exc_info=e)
             raise e
+
+    async def close_database(self):
+        await self.engine.dispose()
 
 
 class DatabaseSession(DataBaseSessionInterface):

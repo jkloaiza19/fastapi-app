@@ -1,12 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from asyncio import to_thread
-from typing import Optional, AsyncGenerator
-from fastapi import UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
-import mimetypes
 from boto3 import client
-from boto3.exceptions import Boto3Error
 from botocore.config import Config
 from core.config import settings
 from core.logger import get_logger
