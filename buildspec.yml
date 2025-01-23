@@ -22,7 +22,7 @@ phases:
 
       - echo Fetching secrets from AWS Secrets Manager...
       - export SECRETS_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRETS_ID --query SecretString --output text)
-g
+
       - echo Generating .env file for application...
       - echo "$SECRETS_JSON" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' > .env
 
