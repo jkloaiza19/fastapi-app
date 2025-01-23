@@ -27,6 +27,10 @@ class HttpClientInterface(ABC):
     async def get_request(self):
         pass
 
+    @abstractmethod
+    async def close(self):
+        pass
+
 
 class RetryDecoratorWrapper:
     @staticmethod
@@ -88,22 +92,32 @@ class HttpClient(HttpClientInterface, ABC):
     async def get_request(
             self,
             url: str,
-            custom_headers: Optional[Dict[str, str]] = {},
+            custom_headers: Optional[Dict[str, str]] = None,
     ) -> Any:
         """Sends a GET request with retries."""
+        custom_headers = custom_headers or {}
         try:
-            async with self.async_client as http_client:
-                response = await http_client.get(
-                    url,
-                    headers={
-                        **self.common_headers,
-                        **custom_headers,
-                    }
-                )
-                return await self.handle_response(response)
-        finally:
-            if isinstance(self.async_client, AsyncClient):
-                await self.async_client.aclose()
+            response = await self.async_client.get(
+                url,
+                headers={
+                    **self.common_headers,
+                    **custom_headers,
+                }
+            )
+            return await self.handle_response(response)
+        except HTTPStatusError as e:
+            logger.error(f"HTTP Status Error: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            raise
+        # finally:
+        #     if isinstance(self.async_client, AsyncClient):
+        #         await self.async_client.aclose()
+
+    async def close(self):
+        if isinstance(self.async_client, AsyncClient):
+            await self.async_client.aclose()
 
 
 class HttpClientSingleton:

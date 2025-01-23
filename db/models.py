@@ -36,6 +36,9 @@ class User(Base):
     comments: Mapped[List["Comment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
+        """Convert the User model to a dictionary \n
+           exclude: Set[str] = {} excludes the specified columns from the dictionary.
+        """
         return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
 
 
