@@ -12,6 +12,7 @@ from api.dependencies import \
     redis_dep, \
     jwt_util_dep
 from schemas.login_schema import SignUpRequest, TokenResponse, SignInRequest
+from core.decorators.auth_decorator import token_required
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -67,3 +68,13 @@ async def signin(
         cognito_client=aws_cognito_client,
         user=user
     )
+
+
+@router.get("/get_user", status_code=status.HTTP_200_OK)
+@token_required
+async def get_user(
+        request: Request,
+        db: user_repository_dep,
+        aws_cognito_client: aws_cognito_client_dep,
+):
+    return request.state.user

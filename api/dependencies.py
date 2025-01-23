@@ -39,6 +39,7 @@ from services.auth import get_auth_client, AuthClientInterface
 
 # Utils
 from utils.jwt_util import JWTUtilInterface, get_jwt_util
+from services.aws.open_search.open_search_client import OpenSearchClientInterface, get_opensearch_client
 
 logger = get_logger(__name__)
 
@@ -52,6 +53,7 @@ database_initializer_dep = Annotated[DataBaseInitializerInterface, Depends(get_d
 # AWS Dependencies
 aws_s3_client_dep = Annotated[AWSClientS3Interface, Depends(get_aws_s3_client)]
 aws_cognito_client_dep = Annotated[CognitoClientInterface, Depends(get_aws_cognito_client)]
+aws_open_search_client_dep = Annotated[OpenSearchClientInterface, Depends(get_opensearch_client)]
 
 # Endpoints Dependencies
 auth_dependency = Annotated[AuthClientInterface, Depends(get_auth_client)]

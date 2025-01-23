@@ -2,20 +2,15 @@
 from abc import ABC, abstractmethod
 from opensearchpy import OpenSearch, RequestsHttpConnection
 from opensearchpy.exceptions import ConnectionError, OpenSearchException
-from concurrent.futures import ThreadPoolExecutor
-import asyncio
 from typing import Optional, AsyncGenerator, Dict, Any
 from core.config import settings
 from core.logger import get_logger
+from utils.run_in_thread_util import get_threading_util, ThreadingUtilInterface
 
 logger = get_logger(__name__)
 
 
 class OpenSearchClientInterface(ABC):
-    @abstractmethod
-    def run_in_thread(self, func, *args, **kwargs):
-        pass
-
     @abstractmethod
     async def create_index(self, index_name: str, index_body: Optional[dict] = {}) -> None:
         pass
@@ -32,10 +27,9 @@ class OpenSearchClientInterface(ABC):
     async def search(self, index_name: str, query: dict) -> dict:
         pass
 
-    # @abstractmethod
-    # def get_document(self, index_name: str, document_id: str) -> Optional[dict]:
-    #     pass
-    #
+    @abstractmethod
+    async def get_document(self, index_name: str, document_id: str) -> Optional[dict]:
+        pass
 
     @abstractmethod
     def close(self):
@@ -43,9 +37,8 @@ class OpenSearchClientInterface(ABC):
 
 
 class OpenSearchClient(OpenSearchClientInterface):
-    def __init__(self):
-        self.executor = ThreadPoolExecutor(max_workers=1)
-        self.loop = asyncio.get_event_loop()
+    def __init__(self, threading_util: ThreadingUtilInterface):
+        self.threading_util = threading_util
         self.client = OpenSearch(
             hosts=[{
                 'host': settings.OPENSEARCH_HOST,
@@ -60,17 +53,12 @@ class OpenSearchClient(OpenSearchClientInterface):
             connection_class=RequestsHttpConnection
         )
 
-    async def run_in_thread(self, func, *args, **kwargs):
-        """Run a blocking function in a thread pool."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self.executor, lambda: func(*args, **kwargs))
-
     async def create_index(self, index_name: str, index_body: Optional[dict] = {}) -> None:
         """Create an OpenSearch index."""
         try:
-            index_exists = await self.run_in_thread(self.client.indices.exists, index_name)
+            index_exists = await self.threading_util.run_in_thread(self.client.indices.exists, index_name)
             if not index_exists:
-                response = await self.run_in_thread(self.client.indices.create, index_name, index_body)
+                response = await self.threading_util.run_in_thread(self.client.indices.create, index_name, index_body)
                 return response
             else:
                 raise OpenSearchException(f"Index {index_name} already exists.")
@@ -80,14 +68,14 @@ class OpenSearchClient(OpenSearchClientInterface):
 
     async def delete_index(self, index_name: str) -> None:
         try:
-            await self.run_in_thread(self.client.indices.delete, index_name)
+            await self.threading_util.run_in_thread(self.client.indices.delete, index_name)
         except OpenSearchException as e:
             logger.error(f"Error deleting index: {e}")
             raise e
 
     async def index_document(self, index_name: str, document: dict) -> None:
         try:
-            response = await self.run_in_thread(
+            response = await self.threading_util.run_in_thread(
                 self.client.index,
                 index=index_name,
                 body=document
@@ -97,16 +85,48 @@ class OpenSearchClient(OpenSearchClientInterface):
             logger.error(f"Error indexing document: {e}")
             raise e
 
-    async def search(self, index_name: str, query: dict) -> dict:
+    async def search(
+            self,
+            index_name: str,
+            query: dict,
+            params: Optional[Dict[str, Any]] = {},
+            headers: Optional[Dict[str, Any]] = {}
+    ) -> dict:
         try:
-            response = await self.run_in_thread(
+            response = await self.threading_util.run_in_thread(
                 self.client.search,
                 index=index_name,
-                body=query
+                body=query,
+                params=params,
+                headers=headers
             )
             return response
         except OpenSearchException as e:
             logger.error(f"Error searching index: {e}")
+            raise e
+
+    async def get_document(
+            self,
+            index_name: str,
+            document_id: str,
+            params: Optional[Dict[str, Any]] = {},
+            headers: Optional[Dict[str, Any]] = {}
+    ) -> Optional[dict]:
+        try:
+            document = await self.threading_util.run_in_thread(
+                self.client.get,
+                index=index_name,
+                id=document_id,
+                params=params,
+                headers=headers
+            )
+
+            if document is None:
+                raise OpenSearchException(f"Document {document_id} not found.")
+
+            return document
+        except OpenSearchException as e:
+            logger.error(f"Error getting document: {e}")
             raise e
 
     def close(self):
@@ -115,7 +135,9 @@ class OpenSearchClient(OpenSearchClientInterface):
 
 def get_opensearch_client() -> AsyncGenerator[OpenSearchClientInterface, None]:
     try:
-        open_search_client = OpenSearchClient()
+        open_search_client = OpenSearchClient(
+            threading_util=get_threading_util()
+        )
         yield open_search_client
     except ConnectionError as e:
         logger.error(f"Error connecting to OpenSearch: {e}")

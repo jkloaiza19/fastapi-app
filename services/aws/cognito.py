@@ -1,16 +1,18 @@
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 from abc import ABC, abstractmethod
 from boto3.exceptions import Boto3Error
 
+from db.models import User
 from schemas.login_schema import (
     RefreshTokenRequest,
     SignInRequest,
     SignUpRequest,
 )
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
+from jose import jwt
+from jose.exceptions import ExpiredSignatureError, JWTError
 from services.aws.aws_client import AwsServiceEnum
-from services.http.http_client import HttpClientInterface
+from services.http.http_client import HttpClientInterface, get_http_client, HttpClientSingleton
 from db.interfaces import DataBaseRepositoryInterface
 from services.redis.redis_client_interface import RedisClientInterface
 from services.aws.aws_client import AWSClient
@@ -42,11 +44,15 @@ class CognitoClientInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_cognito_public_keys(self, http_client: HttpClientInterface) -> dict:
+    async def get_cognito_public_keys(self) -> dict:
         pass
 
     @abstractmethod
-    async def verify_token(self, token: str, db: DataBaseRepositoryInterface) -> dict:
+    async def verify_token(
+            self,
+            token: str,
+            db: DataBaseRepositoryInterface,
+    ) -> dict:
         pass
 
     @abstractmethod
@@ -64,8 +70,10 @@ class CognitoClientInterface(ABC):
 
 
 class CognitoClient(CognitoClientInterface):
-    def __init__(self, aws_client: AWSClient):
+    def __init__(self, aws_client: AWSClient, http_client: HttpClientInterface):
         self.__client = aws_client.get_client()
+        self.http_client = http_client
+        self.cognito_algorithm = "RS256"
 
     def sign_up(self, sign_up_data: SignUpRequest) -> bool:
         try:
@@ -183,8 +191,8 @@ class CognitoClient(CognitoClientInterface):
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    async def get_cognito_public_keys(self, http_client: HttpClientInterface) -> dict:
-        jwks = await http_client.get_request(settings.COGNITO_JWK_URL)
+    async def get_cognito_public_keys(self) -> dict:
+        jwks = await self.http_client.get_request(settings.COGNITO_JWK_URL)
         return {key["kid"]: key for key in jwks["keys"]}
 
     async def verify_token(
@@ -202,14 +210,15 @@ class CognitoClient(CognitoClientInterface):
                 payload = jwt.decode(
                     token,
                     public_key,
-                    algorithms=["RS256"],
+                    algorithms=[self.cognito_algorithm],
                     audience=settings.COGNITO_CLIENT_ID,
                     issuer=f"https://cognito-idp.{settings.AWS_REGION}.amazonaws.com/{settings.COGNITO_USER_POOL_ID}",
                 )
 
-                user = await db.find_unique(payload["username"])
+                user: User = await db.find_unique(None, username=payload["username"])
 
-                return user.to_dict(exclude=['id'])
+                return user.to_dict(exclude=["id"])
+                # return user
             else:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
@@ -219,12 +228,19 @@ class CognitoClient(CognitoClientInterface):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Could not validate credentials: {str(e)}",
             )
+        except ExpiredSignatureError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Token has expired: {str(e)}",
+            )
+        finally:
+            self.close()
 
     async def get_current_user(
             self,
             token: str,
             db: DataBaseRepositoryInterface,
-            redis: RedisClientInterface
+            redis: Optional[RedisClientInterface] = None
     ):
         try:
             response = self.__client.get_user(AccessToken=token)
@@ -258,9 +274,13 @@ class CognitoClient(CognitoClientInterface):
         self.__client.close()
 
 
-def get_aws_cognito_client() -> AsyncGenerator[CognitoClientInterface, None]:
+async def get_aws_cognito_client() -> AsyncGenerator[CognitoClientInterface, None]:
     aws_client = AWSClient(AwsServiceEnum.COGNITO.value)
-    aws_cognito_client = CognitoClient(aws_client=aws_client)
+    http_client = HttpClientSingleton.get_instance()
+    aws_cognito_client = CognitoClient(
+        aws_client=aws_client,
+        http_client=http_client,
+    )
     try:
         yield aws_cognito_client
     except Boto3Error as e:
