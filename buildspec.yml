@@ -8,9 +8,8 @@ env:
 phases:
   install:
     runtime-versions:
-#      python: 3.11
-      nodejs: 14
-      docker: 20
+      python: 3.11
+      docker: 23
     commands:
       - echo "Installing system dependencies..."
       - yum install -y gcc libffi-devel bzip2 bzip2-devel zlib-devel openssl openssl-devel ncurses nc
