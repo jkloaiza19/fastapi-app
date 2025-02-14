@@ -41,6 +41,9 @@ from services.auth import get_auth_client, AuthClientInterface
 from utils.jwt_util import JWTUtilInterface, get_jwt_util
 from services.aws.open_search.open_search_client import OpenSearchClientInterface, get_opensearch_client
 
+# AI
+from services.AI.image_generator import get_image_generator_client, ImageGeneratorInterface
+
 logger = get_logger(__name__)
 
 
@@ -72,6 +75,7 @@ def get_chat_completion_service(http_client: http_client_dep) -> AsyncGenerator[
 
 
 chat_completion_dep = Annotated[OpenAIInterface, Depends(get_chat_completion_service)]
+image_generator_dep = Annotated[ImageGeneratorInterface, Depends(get_image_generator_client)]
 
 
 # Database Dependencies

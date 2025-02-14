@@ -68,6 +68,9 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 docker tag fastapi-app:latest <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/projects/fastapi-app-repo:latest
 docker push <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/projects/fastapi-app-repo:latest
 
+ aws elbv2 describe-target-groups --target-group-arns arn:aws:elasticloadbalancing:us-east-1:888522137833:targetgroup/ecs-FastAP-APIService/df1eb7fb86b23b96
+ aws elbv2 describe-target-health --target-group-arn arn:aws:elasticloadbalancing:us-east-1:888522137833:targetgroup/ecs-FastAP-APIService/df1eb7fb86b23b96
+
 
 Docker:
 docker exec -it mysql mysql -h mysql -u dev -pwipip db
