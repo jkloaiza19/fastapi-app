@@ -61,6 +61,8 @@ redis = "^5.2.1"
 gunicorn = "^23.0.0"
 aiofiles = "^24.1.0"
 opensearch-py = "^2.8.0"
+torch = "^2.6.0"
+torchvision = "^0.21.0"
 
 
 [build-system]

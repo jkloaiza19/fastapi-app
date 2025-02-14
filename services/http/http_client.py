@@ -20,11 +20,20 @@ class HttpClientInterface(ABC):
         pass
 
     @abstractmethod
-    async def post_request(self):
+    async def post_request(
+            self,
+            url: str,
+            data: Dict[str, Any],
+            custom_headers: Optional[Dict[str, str]] = {},
+    ):
         pass
 
     @abstractmethod
-    async def get_request(self):
+    async def get_request(
+            self,
+            url: str,
+            custom_headers: Optional[Dict[str, str]] = None,
+    ):
         pass
 
     @abstractmethod
