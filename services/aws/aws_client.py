@@ -14,6 +14,12 @@ class AwsServiceEnum(str, Enum):
     COGNITO = "cognito-idp"
     DYNAMODB = "dynamodb"
     IAM = "iam"
+    SES = "ses"
+    SNS = "sns"
+    SQS = "sqs"
+    LAMBDA = "lambda"
+    API_GATEWAY = "apigateway"
+    LOGS = "logs"
 
 
 class AWSClientInterface(ABC):
