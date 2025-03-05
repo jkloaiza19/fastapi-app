@@ -13,6 +13,7 @@ from db.database import \
     get_database_session_maker,\
     get_declarative_base,\
     DatabaseSession
+# from db.database_repository import get_generic_repository
 from services.AI.chat_bot import get_chat_completion_service
 from services.AI.interfaces import OpenAIInterface
 from db.crud.user import UserRepository
@@ -92,6 +93,8 @@ async def get_user_repository(db_session: database_session_dep) -> AsyncGenerato
     yield user_repository
 
 user_repository_dep = Annotated[DataBaseRepositoryInterface, Depends(get_user_repository)]
+
+# database_repository_dep = Annotated[DataBaseRepositoryInterface, Depends(get_generic_repository)]
 
 # Redis
 redis_dep = Annotated[RedisClientInterface, Depends(get_redis_client)]

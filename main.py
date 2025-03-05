@@ -1,20 +1,48 @@
 from fastapi import FastAPI
+import sentry_sdk
+# from sentry_sdk.integrations import FastAPIIntegration
+
+# from sentry_sdk.integrations
+# from sentry_sdk.integrations.asgi import SentryAsgiMiddlewa
 from fastapi.concurrency import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from core.logger import configure_logging, get_logger
+from core.config import settings
 from db.database import get_database_initializer
 
 # Routes
 from api.v1.main import v1_router
 from core.middlewares.request_logger_middleware import RequestLoggingMiddleware
+from core.middlewares.cloudwatch_logs_middleware import CloudWatchLoggingMiddleware
 # Middlewares
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
+
+from graphql_server.graphql_handler import graphql_app
 from services.redis.initialize_redis import get_redis
 
 
 logger = get_logger(__name__)
+
+# sentry_sdk.init(dsn=settings.SENTRY_DNS)
+
+
+sentry_sdk.init(
+    dsn=settings.SENTRY_DNS,
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    traces_sample_rate=1.0,
+    # Set profiles_sample_rate to 1.0 to profile 100%
+    # of sampled transactions.
+    # We recommend adjusting this value in production.
+    profiles_sample_rate=1.0,
+    # integrations=[
+    #     StrawberryIntegration(
+    #         async_execution=True,
+    #     ),
+    # ],
+)
 
 
 @asynccontextmanager
@@ -66,7 +94,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Middlewares
 app.middleware(RequestLoggingMiddleware)
-
+app.middleware(CloudWatchLoggingMiddleware)
+# app.add_middleware(SentryAsgiMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -77,6 +106,7 @@ app.add_middleware(
 
 # Routes
 app.include_router(v1_router)
+app.include_router(graphql_app, prefix="/graphql")
 
 
 @app.get("/healthcheck")

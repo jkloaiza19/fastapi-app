@@ -118,3 +118,8 @@ def get_database_initializer() -> DataBaseInitializerInterface:
     return DataBaseInitializer(get_database_engine(), get_declarative_base())
 
 
+async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
+    async with DatabaseSession(get_database_session_maker()) as session:
+        yield session
+
+
