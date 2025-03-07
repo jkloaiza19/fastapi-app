@@ -19,53 +19,53 @@ phases:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-      - echo "Fetching existing task definition ARN..."
-      - export TASK_DEFINITION=$(aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE --query "services[0].taskDefinition" --output text)
-
-      - echo "Fetching current task definition JSON..."
-      - aws ecs describe-task-definition --task-definition $TASK_DEFINITION > current-task-definition.json
+#      - echo "Fetching existing task definition ARN..."
+#      - export TASK_DEFINITION=$(aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE --query "services[0].taskDefinition" --output text)
+#
+#      - echo "Fetching current task definition JSON..."
+#      - aws ecs describe-task-definition --task-definition $TASK_DEFINITION > current-task-definition.json
 
       - echo Fetching secrets from AWS Secrets Manager...
       - export SECRETS_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRETS_ID --query SecretString --output text)
 
       - echo Generating .env file for application...
-      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' > .env
+      - echo "$SECRETS_JSON" | jq -r 'to_entries|map("export \(.key)=\(.value|tostring)")|.[]' >> .env
 
-      - echo Preparing environment variables for ECS task definition...
-      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\":\"\(.value)\"}") | join(",")' > env_variables.json
+#      - echo Preparing environment variables for ECS task definition...
+#      - echo "$SECRETS_JSON" | jq -r 'to_entries | map("{\"name\":\"\(.key)\", \"value\":\"\(.value)\"}") | join(",")' > env_variables.json
 
       - echo Generating image tag...
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:-latest}
 
-      - echo Updating task definition with environment variables...
+#      - echo Updating task definition with environment variables...
 #     - jq ".containerDefinitions[0].environment = $(cat env_variables.json)" current-task-definition.json > updated-task-definition.json
-      - |
-          jq --argjson env_vars "$(echo $SECRETS_JSON | jq -r 'to_entries | map({"name": .key, "value": .value})')" \
-            '.taskDefinition.containerDefinitions[0].environment = $env_vars' \
-            current-task-definition.json > updated-task-definition.json
+#      - |
+#          jq --argjson env_vars "$(echo $SECRETS_JSON | jq -r 'to_entries | map({"name": .key, "value": .value})')" \
+#            '.taskDefinition.containerDefinitions[0].environment = $env_vars' \
+#            current-task-definition.json > updated-task-definition.json
 
 #      - echo Validating modified task definition...
 #      - jq empty updated-task-definition.json || { echo "Invalid task definition JSON"; exit 1; }
-      - echo "Cleaning up unnecessary fields from task definition..."
-      - |
-          jq '{
-            family: .taskDefinition.family,
-            taskRoleArn: .taskDefinition.taskRoleArn,
-            executionRoleArn: .taskDefinition.executionRoleArn,
-            networkMode: .taskDefinition.networkMode,
-            containerDefinitions: .taskDefinition.containerDefinitions,
-            volumes: .taskDefinition.volumes,
-            placementConstraints: .taskDefinition.placementConstraints,
-            requiresCompatibilities: .taskDefinition.requiresCompatibilities,
-            cpu: .taskDefinition.cpu,
-            memory: .taskDefinition.memory
-          }' updated-task-definition.json > cleaned-task-definition.json
+#      - echo "Cleaning up unnecessary fields from task definition..."
+#      - |
+#          jq '{
+#            family: .taskDefinition.family,
+#            taskRoleArn: .taskDefinition.taskRoleArn,
+#            executionRoleArn: .taskDefinition.executionRoleArn,
+#            networkMode: .taskDefinition.networkMode,
+#            containerDefinitions: .taskDefinition.containerDefinitions,
+#            volumes: .taskDefinition.volumes,
+#            placementConstraints: .taskDefinition.placementConstraints,
+#            requiresCompatibilities: .taskDefinition.requiresCompatibilities,
+#            cpu: .taskDefinition.cpu,
+#            memory: .taskDefinition.memory
+#          }' updated-task-definition.json > cleaned-task-definition.json
 
   build:
     commands:
-      - echo "Registering the updated task definition..."
-      - export NEW_TASK_DEFINITION=$(aws ecs register-task-definition --cli-input-json file://cleaned-task-definition.json --query "taskDefinition.taskDefinitionArn" --output text)
+#      - echo "Registering the updated task definition..."
+#      - export NEW_TASK_DEFINITION=$(aws ecs register-task-definition --cli-input-json file://cleaned-task-definition.json --query "taskDefinition.taskDefinitionArn" --output text)
 
       - echo Building the Docker image...
       - docker build --tag=$REPOSITORY_URI:latest .

@@ -23,9 +23,17 @@ wait_seconds = 10
 # engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
 
 
+def is_running_in_docker():
+    try:
+        with open("/proc/1/cgroup", "rt") as f:
+            return "docker" in f.read()
+    except FileNotFoundError:
+        return False
+
+
 @dataclass
 class DataBaseEngine(DataBaseEngineInterface):
-    engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+    engine = create_async_engine(settings.ASYNC_DATABASE_URL_EXT)
 
     def get_engine(self) -> AsyncEngine:
         return self.engine
