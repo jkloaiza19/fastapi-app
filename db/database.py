@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from functools import lru_cache
+from fastapi import Depends
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Annotated
 from tenacity import after_log, before_log, retry, stop_after_attempt, wait_fixed
 
 from db.interfaces import \
@@ -129,5 +130,8 @@ def get_database_initializer() -> DataBaseInitializerInterface:
 async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
     async with DatabaseSession(get_database_session_maker()) as session:
         yield session
+
+
+database_session_dep = Annotated[AsyncSession, Depends(get_database_session)]
 
 
