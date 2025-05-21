@@ -31,6 +31,7 @@ class UserRequest(UserBase):
 
 
 class UserResponse(UserBase):
+    id: int = Field()
     is_confirmed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

@@ -64,6 +64,10 @@ opensearch-py = "^2.8.0"
 torch = "^2.6.0"
 torchvision = "^0.21.0"
 strawberry-graphql = "^0.261.1"
+slowapi = "^0.1.9"
+celery = "^5.5.2"
+websockets = "^15.0.1"
+aioredis = "^2.0.1"
 
 
 [build-system]

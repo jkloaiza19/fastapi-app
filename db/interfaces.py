@@ -58,9 +58,9 @@ class DataBaseRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def create_one(self, resource):
+    async def create_one(self, resource: dict):
         pass
 
     @abstractmethod
-    async def update_one(self, resource):
+    async def update_one(self, resource: dict):
         pass

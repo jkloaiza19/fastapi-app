@@ -1,40 +1,56 @@
-from http.client import HTTPException
-
+from abc import ABC, abstractmethod
+from fastapi import Depends
+from typing import Dict, Optional, AsyncGenerator, Union, Annotated
+import json
 import redis.asyncio as redis
-from redis import Redis
-
+from redis.asyncio import Redis as AsyncRedis
 from core.logger import get_logger
 from core.config import settings
-from typing import Dict, Optional, AsyncGenerator
-import json
-
-from services.redis.redis_client_interface import RedisClientInterface
 
 logger = get_logger(__name__)
 expire = 300
 
 
+class RedisClientInterface(ABC):
+    @abstractmethod
+    async def get_cached_data(self, key: str) -> Optional[Union[str, int, bool, Dict]]:
+        pass
+
+    @abstractmethod
+    async def set_cache_data(self, key: str, value: Optional[Union[str, int, bool, Dict]]):
+        pass
+
+
 class RedisClient(RedisClientInterface):
     def __init__(self, redis_url: str):
-        pool = redis.ConnectionPool.from_url(redis_url)
-        print(f"Redis URL: {redis_url}")
-        self.redis_client: Redis = redis.Redis(connection_pool=pool).client()
+        self.redis_client: AsyncRedis = redis.from_url(redis_url)
 
     async def get_cached_data(self, key: str) -> Optional[Dict]:
-        print(f"Ping successful: {await self.redis_client.ping()}")
-        data = await self.redis_client.get(key)
-        if data:
-            return json.loads(data)
-        return None
+        try:
+            data = await self.redis_client.get(key)
+            if data:
+                return json.loads(data)
+            return None
+        except Exception as e:
+            logger.error(f"Error retrieving cache for {key}: {e}")
+            return None
 
-    async def set_cache_data(self, key: str, value: Optional[str | int | bool | Dict]):
-        await self.redis_client.set(name=key, value=json.dumps(value), ex=expire)
+    async def set_cache_data(self, key: str, value: Optional[Union[str, int, bool, Dict]]):
+        try:
+            await self.redis_client.set(name=key, value=json.dumps(value), ex=expire)
+        except Exception as e:
+            logger.error(f"Error setting cache for {key}: {e}")
 
 
 async def get_redis_client() -> AsyncGenerator[RedisClientInterface, None]:
+    client = RedisClient(settings.REDIS_URL)
     try:
-        redis_client = RedisClient(settings.REDIS_URL)
-        yield redis_client
+        yield client
     except Exception as e:
-        logger.error(f"{str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to initialize Redis service. {str(e)}")
+        logger.error(f"Error in Redis client: {e}")
+        raise e
+    finally:
+        await client.redis_client.aclose()
+
+
+redis_dep = Annotated[RedisClientInterface, Depends(get_redis_client)]
