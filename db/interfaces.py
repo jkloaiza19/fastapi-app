@@ -40,6 +40,16 @@ class DeclarativeBaseInterface(ABC):
 
 
 class DataBaseRepositoryInterface(ABC):
+    @property
+    @abstractmethod
+    def get_session(self) -> AsyncSession:
+        """Get the current database session."""
+        pass
+
+    @abstractmethod
+    async def get_total_count(self) -> int:
+        """Get the total count of items in the table."""
+        pass
 
     @abstractmethod
     async def get_all(self, limit: int = 0, offset: int = 0):

@@ -1,5 +1,6 @@
 from abc import ABC
 from typing import AsyncGenerator, Type, TypeVar, Generic, Optional, List, Annotated
+from sqlalchemy import func
 from sqlalchemy.future import select
 import json
 from core.logger import get_logger
@@ -18,13 +19,26 @@ logger = get_logger(__name__)
 
 class GenericDataBaseRepository(DataBaseRepositoryInterface, ABC):
     def __init__(self, session: AsyncSession, model: any):
-        self.session = session
-        self.model = model
+        self.__session = session
+        self.__model = model
+        
+    def get_session(self) -> AsyncSession:
+        return self.__session
+
+    async def get_total_count(self) -> int:
+        try:
+            stmt = select(func.count()).select_from(self.__model)
+            result = await self.__session.execute(stmt)
+            total_count = result.scalar_one()
+            return total_count
+        except SQLAlchemyError as e:
+            logger.error(f"Error fetching total count: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     async def get_all(self, limit: int = 0, offset: int = 0) -> List[T]:
         try:
-            stmt = select(self.model).limit(limit).offset(offset)
-            result = await self.session.scalars(stmt)
+            stmt = select(self.__model).limit(limit).offset(offset)
+            result = await self.__session.scalars(stmt)
             return result.all()
         except DatabaseError as e:
             logger.error(f"{e}")
@@ -35,11 +49,11 @@ class GenericDataBaseRepository(DataBaseRepositoryInterface, ABC):
             raise ValueError("At least one search parameter is required")
 
         try:
-            stmt = select(self.model)
+            stmt = select(self.__model)
             for field, value in kwargs.items():
-                stmt = stmt.where(getattr(self.model, field) == value)
+                stmt = stmt.where(getattr(self.__model, field) == value)
 
-            result = await self.session.execute(stmt)
+            result = await self.__session.execute(stmt)
             instances = result.scalars().all()
 
             if not instances:
@@ -60,18 +74,18 @@ class GenericDataBaseRepository(DataBaseRepositoryInterface, ABC):
             raise ValueError("At least one search parameter is required")
 
         try:
-            stmt = select(self.model)
+            stmt = select(self.__model)
             for field, value in kwargs.items():
-                stmt = stmt.where(getattr(self.model, field) == value)
+                stmt = stmt.where(getattr(self.__model, field) == value)
 
-            result = await self.session.execute(stmt)
+            result = await self.__session.execute(stmt)
             instance = result.scalar_one_or_none()
 
             if instance is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
 
             info_to_cache = instance.to_dict()
-            redis_key = f"{self.model.__name__.lower()}-{kwargs['id']}" if "id" in kwargs else None
+            redis_key = f"{self.__model.__name__.lower()}-{kwargs['id']}" if "id" in kwargs else None
 
             if redis and redis_key:
                 cached_data = await redis.get_cached_data(redis_key)
@@ -98,29 +112,29 @@ class GenericDataBaseRepository(DataBaseRepositoryInterface, ABC):
 
     async def create_one(self, data: dict) -> T:
         try:
-            new_instance = self.model(**data)
-            self.session.add(new_instance)
-            await self.session.commit()
-            await self.session.refresh(new_instance)
+            new_instance = self.__model(**data)
+            self.__session.add(new_instance)
+            await self.__session.commit()
+            await self.__session.refresh(new_instance)
             return new_instance
         except SQLAlchemyError as e:
-            await self.session.rollback()
+            await self.__session.rollback()
             logger.error(f"Error creating record: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     async def update_one(self, instance: T) -> T:
         try:
-            await self.session.commit()
-            await self.session.refresh(instance)
+            await self.__session.commit()
+            await self.__session.refresh(instance)
             return instance
         except SQLAlchemyError as e:
-            await self.session.rollback()
+            await self.__session.rollback()
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     async def find_by_query(self, query: str):
         try:
             stmt = text(query)
-            result = await self.session.execute(stmt)
+            result = await self.__session.execute(stmt)
             rows = result.fetchall()
             if not rows:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No records found")
