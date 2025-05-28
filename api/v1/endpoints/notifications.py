@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Request
 from fastapi.responses import JSONResponse
 from core.logger import get_logger
 from api.dependencies import user_repository_dep
@@ -11,6 +11,17 @@ from services.notifications.notifications_service import notifications_service_d
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+@router.get("/all", status_code=status.HTTP_200_OK)
+async def get_all_notifications(
+        request: Request,
+        notifications_service: notifications_service_dep,
+        limit: int = 0,
+        offset: int = 0,
+):
+    notifications = await notifications_service.get_paginated_notifications(limit=limit, offset=offset, request=request)
+    return notifications
 
 
 @router.get("/{user_id}", status_code=status.HTTP_200_OK)

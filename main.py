@@ -23,6 +23,7 @@ from services.web_sockets.ws_manager import ws_manager_dep
 from api.v1.main import v1_router
 from core.middlewares.request_logger_middleware import RequestLoggingMiddleware
 from core.middlewares.cloudwatch_logs_middleware import CloudWatchLoggingMiddleware
+from core.middlewares.security_headers_middleware import SecurityHeadersMiddleware
 
 # Middlewares
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,7 +31,6 @@ from mangum import Mangum
 
 from graphql_server.graphql_handler import graphql_app
 from services.redis.initialize_redis import get_redis
-
 
 logger = get_logger(__name__)
 
@@ -118,6 +118,8 @@ app.add_exception_handler(RateLimitExceeded, lambda req, exc: JSONResponse(
     status_code=429, content={"detail": "Rate limit exceeded"}
 ))
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+
 
 # Routes
 app.include_router(v1_router)

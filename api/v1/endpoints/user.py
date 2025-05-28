@@ -6,6 +6,7 @@ from schemas.user_schema import UserRequest, UserResponse
 from typing import Dict
 from api.dependencies import redis_dep
 from core.decorators.request_cache_decorator import request_cache_response
+from utils.pagination_util import get_base_url
 
 logger = get_logger(__name__)
 router = APIRouter()

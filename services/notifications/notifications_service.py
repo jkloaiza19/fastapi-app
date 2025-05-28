@@ -1,17 +1,25 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Annotated
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from db.database_repository import DataBaseRepositoryInterface, notifications_repository_dep
 from db.models import Notifications
 from services.web_sockets.ws_manager import WSClientInterface, ws_manager_dep
 from schemas.notification_schema import NotificationRequest, NotificationResponse
 from core.logger import get_logger
+from schemas import ResponseWithPagination
+from utils.pagination_util import generate_pagination, get_base_url
 
 logger = get_logger(__name__)
 
 
 class NotificationsServiceInterface(ABC):
+    """Interface for Notifications Service."""
+    @abstractmethod
+    async def get_paginated_notifications(self, request: Request, limit: int = 0, offset: int = 0) -> list:
+        """Get all notifications."""
+        pass
+
     @abstractmethod
     async def send_notification(self, notification: NotificationRequest) -> None:
         """Send a notification to a user."""
@@ -32,6 +40,36 @@ class NotificationsService(NotificationsServiceInterface):
     def __init__(self, repository: DataBaseRepositoryInterface, ws_client: WSClientInterface):
         self.repository = repository
         self.ws_client = ws_client
+
+    async def get_paginated_notifications(
+            self,
+            request: Request,
+            limit: int = 0,
+            offset: int = 0
+    ) -> ResponseWithPagination:
+        try:
+            print(f"Request: {request.method}")
+            notifications = await self.repository.get_all(limit=limit, offset=offset)
+            total_notifications = await self.repository.get_total_count()
+
+            if not notifications or not total_notifications:
+                raise Exception("No notifications found")
+
+            paginated_notifications = generate_pagination(
+                page=offset,
+                total_items=total_notifications,
+                page_size=limit,
+                base_url=get_base_url(request),
+                method=request.method,
+            )
+
+            return ResponseWithPagination(
+                pagination=paginated_notifications,
+                results=notifications,
+            )
+        except Exception as e:
+            logger.error(f"Error fetching notifications: {e}")
+            raise e
 
     async def send_notification(
             self,

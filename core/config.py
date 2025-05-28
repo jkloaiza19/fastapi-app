@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    ENVIRONMENT: Literal["dev", "staging", "production"] = "dev"
     DATABASE_URL: Optional[str] = None
     ASYNC_DATABASE_URL_EXT: Optional[str] = None
     ASYNC_DATABASE_URL: Optional[str] = None
