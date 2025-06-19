@@ -1,12 +1,13 @@
 from fastapi import APIRouter, status, Request
 from fastapi.responses import JSONResponse
 from core.logger import get_logger
-from api.dependencies import user_repository_dep
+# from api.dependencies import user_repository_dep
 from schemas.user_schema import UserRequest, UserResponse
 from typing import Dict
 from api.dependencies import redis_dep
 from core.decorators.request_cache_decorator import request_cache_response
 from utils.pagination_util import get_base_url
+from db.database_repository import user_repository_dep
 
 logger = get_logger(__name__)
 router = APIRouter()

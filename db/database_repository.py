@@ -17,14 +17,16 @@ T = TypeVar("T")
 logger = get_logger(__name__)
 
 
-class GenericDataBaseRepository(DataBaseRepositoryInterface, ABC):
-    def __init__(self, session: AsyncSession, model: any):
+class GenericDataBaseRepository(DataBaseRepositoryInterface, Generic[T]):
+    def __init__(self, session: AsyncSession, model: Type[T]):
         self.__session = session
         self.__model = model
         
+    @property
     def get_session(self) -> AsyncSession:
         return self.__session
 
+    @property
     async def get_total_count(self) -> int:
         try:
             stmt = select(func.count()).select_from(self.__model)
@@ -144,18 +146,22 @@ class GenericDataBaseRepository(DataBaseRepositoryInterface, ABC):
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-async def get_user_repository(db_session: database_session_dep) -> AsyncGenerator[GenericDataBaseRepository, None]:
+async def get_user_repository(
+        db_session: database_session_dep
+) -> AsyncGenerator[GenericDataBaseRepository[User], None]:
     try:
-        repository = GenericDataBaseRepository(db_session, User)
+        repository = GenericDataBaseRepository[User](db_session, User)
         yield repository
     except Exception as e:
         logger.error(f"Error initializing user repository: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-async def get_comments_repository(db_session: database_session_dep) -> AsyncGenerator[GenericDataBaseRepository, None]:
+async def get_comments_repository(
+        db_session: database_session_dep
+) -> AsyncGenerator[GenericDataBaseRepository[Comment], None]:
     try:
-        repository = GenericDataBaseRepository(db_session, Comment)
+        repository = GenericDataBaseRepository[Comment](db_session, Comment)
         yield repository
     except Exception as e:
         logger.error(f"Error initializing comments repository: {e}")
@@ -164,18 +170,14 @@ async def get_comments_repository(db_session: database_session_dep) -> AsyncGene
 
 async def get_notifications_repository(
         db_session: database_session_dep
-) -> AsyncGenerator[GenericDataBaseRepository, None]:
+) -> AsyncGenerator[GenericDataBaseRepository[Notifications], None]:
     try:
-        repository = GenericDataBaseRepository(db_session, Notifications)
+        repository = GenericDataBaseRepository[Notifications](db_session, Notifications)
 
         yield repository
     except Exception as e:
         logger.error(f"Error initializing notifications repository: {e}")
         raise e
-        # raise HTTPException(
-        #     status_code=
-        #     status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        # ) from e
 
 
 user_repository_dep = Annotated[GenericDataBaseRepository, Depends(get_user_repository)]
