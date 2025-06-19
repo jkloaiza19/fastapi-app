@@ -46,6 +46,7 @@ class DataBaseRepositoryInterface(ABC):
         """Get the current database session."""
         pass
 
+    @property
     @abstractmethod
     async def get_total_count(self) -> int:
         """Get the total count of items in the table."""

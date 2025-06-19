@@ -36,7 +36,6 @@ logger = get_logger(__name__)
 
 # sentry_sdk.init(dsn=settings.SENTRY_DNS)
 
-
 sentry_sdk.init(
     dsn=settings.SENTRY_DNS,
     # Set traces_sample_rate to 1.0 to capture 100%

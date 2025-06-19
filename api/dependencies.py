@@ -88,11 +88,11 @@ async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
 database_session_dep = Annotated[AsyncSession, Depends(get_database_session)]
 
 
-async def get_user_repository(db_session: database_session_dep) -> AsyncGenerator[DataBaseRepositoryInterface, None]:
-    user_repository = UserRepository(db_session)
-    yield user_repository
+# async def get_user_repository(db_session: database_session_dep) -> AsyncGenerator[DataBaseRepositoryInterface, None]:
+#     user_repository = UserRepository(db_session)
+#     yield user_repository
 
-user_repository_dep = Annotated[DataBaseRepositoryInterface, Depends(get_user_repository)]
+# user_repository_dep = Annotated[DataBaseRepositoryInterface, Depends(get_user_repository)]
 
 # database_repository_dep = Annotated[DataBaseRepositoryInterface, Depends(get_generic_repository)]
 

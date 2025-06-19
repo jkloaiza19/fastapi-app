@@ -6,19 +6,22 @@ from api.dependencies import redis_dep
 from api.dependencies import \
     http_client_dep, \
     aws_cognito_client_dep, \
-    user_repository_dep, \
     email_client_dep, \
     auth_dependency, \
     redis_dep, \
     jwt_util_dep
 from schemas.login_schema import SignUpRequest, TokenResponse, SignInRequest
 from core.decorators.auth_decorator import token_required
+from utils.general_util import get_limiter
+from db.database_repository import user_repository_dep
 
 logger = get_logger(__name__)
 router = APIRouter()
+limiter = get_limiter()
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/hour")
 async def signup(
         auth: auth_dependency,
         user: SignUpRequest,
