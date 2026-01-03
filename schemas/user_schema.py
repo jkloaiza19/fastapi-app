@@ -1,4 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import datetime
 
 
 class UserBase(BaseModel):
@@ -6,6 +7,9 @@ class UserBase(BaseModel):
 
     username: str = Field(min_length=5, max_length=20)
     email: str = Field(pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+
+
+class UserRequest(UserBase):
     password: str = Field(
         min_length=8,
         max_length=20,
@@ -26,6 +30,8 @@ class UserBase(BaseModel):
         return value
 
 
-class UserRequest(UserBase):
-    pass
-
+class UserResponse(UserBase):
+    id: int = Field()
+    is_confirmed: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)

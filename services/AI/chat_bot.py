@@ -67,8 +67,7 @@ def get_chat_completion_service() -> AsyncGenerator[OpenAIInterface, None]:
         logger.error(str(e))
         raise e
     finally:
-        chat_completion
-
+        chat_completion.http_client.close()
 
 
 def get_chat_completion(http_client: HttpClient) -> ChatCompletion:

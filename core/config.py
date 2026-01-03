@@ -1,5 +1,7 @@
+import json
 import secrets
 from typing import Optional, Literal
+import boto3
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import EmailStr
@@ -12,8 +14,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    ENVIRONMENT: Literal["dev", "staging", "production"] = "dev"
     DATABASE_URL: Optional[str] = None
+    ASYNC_DATABASE_URL_EXT: Optional[str] = None
     ASYNC_DATABASE_URL: Optional[str] = None
     DB_FORCE_ROLLBACK: bool = False
     AWS_REGION: str = ""
@@ -39,30 +42,39 @@ class Settings(BaseSettings):
     COGNITO_CLIENT_ID: Optional[str] = ""
     COGNITO_CLIENT_SECRET: Optional[str] = ""
     COGNITO_JWK_URL: Optional[str] = ""
+    AWS_LOG_GROUP: Optional[str] = ""
+    AWS_LOG_STREAM: Optional[str] = ""
     ASTRA_CLIENT_ID: Optional[str] = ""
     ASTRA_SECRET_KEY: Optional[str] = ""
     ASTRA_DB_NAMESPACE: Optional[str] = ""
     ASTRA_DB_TOKEN: Optional[str] = ""
     ASTRA_DB_ENDPOINT: Optional[str] = ""
+    REDIS_URL: Optional[str] = "redis://localhost:6379"
+    REDIS_CHANNEL: Optional[str] = ""
+    REDIS_PASSWORD: Optional[str] = ""
+    OPENSEARCH_HOST: Optional[str] = ""
+    OPENSEARCH_PORT: Optional[int] = 9200
+    OPEN_SEARCH_USERNAME: Optional[str] = ""
+    OPENSEARCH_INITIAL_ADMIN_PASSWORD: Optional[str] = ""
 
     def is_local_environment(self) -> bool:
         return self.ENVIRONMENT == "local"
 
-    # def load_secrets_from_aws(self, secret_name: str):
-    #     if self.ENVIRONMENT == "production":
-    #         session = boto3.session.Session()
-    #         client = session.client(
-    #             service_name="secretsmanager",
-    #             region_name=self.AWS_REGION,
-    #         )
-    #         try:
-    #             response = client.get_secret_value(SecretId=secret_name)
-    #             secret_dict = json.loads(response["SecretString"])
-    #             for key, value in secret_dict.items():
-    #                 if hasattr(self, key):
-    #                     setattr(self, key, value)
-    #         except Exception as e:
-    #             raise RuntimeError(f"Failed to load secrets: {e}")
+    def load_secrets_from_aws(self, secret_name: str):
+        if self.ENVIRONMENT == "production":
+            session = boto3.session.Session()
+            client = session.client(
+                service_name="secretsmanager",
+                region_name=self.AWS_REGION,
+            )
+            try:
+                response = client.get_secret_value(SecretId=secret_name)
+                secret_dict = json.loads(response["SecretString"])
+                for key, value in secret_dict.items():
+                    if hasattr(self, key):
+                        setattr(self, key, value)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load secrets: {e}")
 
 
 settings = Settings()

@@ -6,18 +6,20 @@ from sqlalchemy.exc import DatabaseError, NoResultFound, SQLAlchemyError
 from sqlalchemy.sql import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
+from typing import Optional
 
 from db.interfaces import DataBaseRepositoryInterface, DataBaseSessionInterface
 from db.database import DatabaseSession, DataBaseSessionMaker
 from db.models import User
-from schemas.user_schema import UserRequest
+from schemas.user_schema import UserRequest, UserResponse
+from services.redis.redis_client_interface import RedisClientInterface
 
 logger = get_logger(__name__)
 
 
 class UserRepository(DataBaseRepositoryInterface):
-    # def __init__(self, session: AsyncSession):
-    #     self.session = session
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
     async def get_all(self, limit: int = 0, offset: int = 0):
         try:
@@ -30,20 +32,46 @@ class UserRepository(DataBaseRepositoryInterface):
             logger.error(f"{e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{e}")
 
-    async def find_unique(self, **kwargs):
+    async def find_unique(
+            self,
+            redis: Optional[RedisClientInterface] = None,
+            **kwargs
+    ):
         if not kwargs:
             raise ValueError("At least one search parameter is required")
 
         try:
             stmt = select(User)
             for field, value in kwargs.items():
+                print(f"Field: {field}")
+
+                if field == "id" and redis is not None:
+                    cached_user = await redis.get_cached_data(f"user-{value}")
+                    print(f"Cached user: {cached_user}")
+
+                    if cached_user is not None:
+                        return cached_user
+
                 stmt = stmt.where(getattr(User, field) == value)
 
+            print(f"Statement: {stmt}")
             result = await self.session.execute(stmt)
             user = result.scalar_one_or_none()
 
             if user is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+            user_to_cache = user.to_dict()
+
+            if redis is not None:
+                await redis.set_cache_data(f"user-{user_to_cache['id']}", {
+                    "id": user_to_cache["id"],
+                    "username": user_to_cache["username"],
+                    "email": user_to_cache["email"],
+                    "is_confirmed": user_to_cache["is_confirmed"],
+                    "created_at": str(user_to_cache["created_at"]),
+                    "updated_at": str(user_to_cache["updated_at"])
+                })
 
             return user
         except NoResultFound:
@@ -107,31 +135,30 @@ class UserRepository(DataBaseRepositoryInterface):
                 detail=f"Failed to create user: {str(e)}"
             ) from e
 
+    async def update_one(self, resource: User) -> UserResponse:
+        print(f"Resource: {resource.id}")
+        try:
+            stmt = select(User).where(User.id == resource.id)
+            result = await self.session.execute(stmt)
+            existing_user = result.scalar_one_or_none()
 
-async def update_one(self, resource: UserRequest) -> User:
-    """Update an existing user in the database."""
-    try:
-        stmt = select(User).where(User.id == resource.id)
-        result = await self.session.execute(stmt)
-        existing_user = result.scalar_one_or_none()
+            if not existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"User with email {resource.email} not found"
+                )
 
-        if not existing_user:
+            for field, value in resource.to_dict().items():
+                setattr(existing_user, field, value)
+
+            await self.session.commit()
+            await self.session.refresh(existing_user)
+
+            return existing_user
+
+        except SQLAlchemyError as e:
+            await self.session.rollback()
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User with id {resource.id} not found"
-            )
-
-        for field, value in resource.dict(exclude_unset=True).items():
-            setattr(existing_user, field, value)
-
-        await self.session.commit()
-        await self.session.refresh(existing_user)
-
-        return existing_user
-
-    except SQLAlchemyError as e:
-        await self.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update user: {e}"
-        ) from e
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to update user: {e}"
+            ) from e

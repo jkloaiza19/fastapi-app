@@ -1,0 +1,60 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                margin: 0;
+                padding: 20px;
+            }
+            .container {
+                background-color: #fff;
+                max-width: 600px;
+                margin: auto;
+                padding: 20px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                border-radius: 10px;
+            }
+            .header {
+                background-color: #4CAF50;
+                color: #ffffff;
+                padding: 10px;
+                text-align: center;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+            .content {
+                padding: 20px;
+            }
+            .content h2 {
+                text-align: center;
+            }
+            .footer {
+                text-align: center;
+                padding: 10px;
+                font-size: 0.8em;
+                color: #777;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Account Confirmation</h1>
+            </div>
+            <div class="content">
+                <h2>Hello, {{ username }}</h2>
+                <p>Your account has been successfully confirmed! Thank you for verifying your email address.</p>
+                <p>You can now access all the features available on our platform. We're excited to have you with us.</p>
+                <p><strong>Enjoy your experience!</strong></p>
+            </div>
+            <div class="footer">
+                Regards,<br>
+                The API Team
+            </div>
+        </div>
+    </body>
+</html>

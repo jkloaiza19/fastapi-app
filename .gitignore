@@ -39,6 +39,7 @@ share/python-wheels/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+commands.txt
 
 # Unit test / coverage reports
 htmlcov/
@@ -54,6 +55,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+**/**/package/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -81,6 +83,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.env.buildspec
 env/
 venv/
 ENV/
@@ -117,4 +120,3 @@ lambda-package/
 deployment_package.zip
 get-pip.py
 api.log
-commands.txt

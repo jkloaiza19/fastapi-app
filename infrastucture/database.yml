@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Aurora PostgreSQL Cluster with Multi-AZ, Read Replica, and Auto-Scaling'
+
+Parameters:
+  DBClusterName:
+    Type: String
+    Default: 'aurora-postgres-cluster'
+    Description: 'Name of the Aurora PostgreSQL cluster.'
+
+  MasterUsername:
+    Type: String
+    Default: 'postgresadmin'
+    Description: 'Master username for the database.'
+
+  MasterUserPassword:
+    Type: String
+    NoEcho: true
+    Description: 'Master user password for the database.'
+
+  DBInstanceClass:
+    Type: String
+    Default: 'db.t3.medium'
+    Description: 'Instance class for the writer instance.'
+
+  ReadReplicaInstanceClass:
+    Type: String
+    Default: 'db.t3.small'
+    Description: 'Instance class for the read replica.'
+
+Resources:
+  # Aurora PostgreSQL DB Cluster
+  AuroraPostgresDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Ref DBClusterName
+      Engine: 'aurora-postgresql'
+      EngineVersion: '15.3'  # Replace with the latest version if needed
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      BackupRetentionPeriod: 7
+      StorageEncrypted: true
+      DeletionProtection: true
+      EnableIAMDatabaseAuthentication: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBClusterSecurityGroup
+      EnableCloudwatchLogsExports:
+        - 'postgresql'
+      PerformanceInsightsEnabled: true
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 2.0
+
+  # DB Instance for Writer
+  AuroraPostgresDBInstanceWriter:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: 'aurora-postgres-writer'
+      DBClusterIdentifier: !Ref AuroraPostgresDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: 'aurora-postgresql'
+      PubliclyAccessible: false
+
+  # DB Instance for Read Replica
+  AuroraPostgresDBInstanceReader:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: 'aurora-postgres-reader'
+      DBClusterIdentifier: !Ref AuroraPostgresDBCluster
+      DBInstanceClass: !Ref ReadReplicaInstanceClass
+      Engine: 'aurora-postgresql'
+      PubliclyAccessible: false
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: 'aurora-db-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for Aurora PostgreSQL cluster'
+      SubnetIds:
+        !Split [",", !ImportValue 'PrivateSubnetIds']
+
+  # Security Group for Aurora Cluster
+  DBClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Aurora PostgreSQL cluster'
+      VpcId: !ImportValue 'VPCId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.0.0.0/16
+
+Outputs:
+  DBClusterEndpoint:
+    Description: 'The cluster endpoint for the Aurora PostgreSQL cluster'
+    Value: !GetAtt AuroraPostgresDBCluster.Endpoint.Address
+
+  ReadReplicaEndpoint:
+    Description: 'The reader endpoint for the Aurora PostgreSQL cluster'
+    Value: !GetAtt AuroraPostgresDBCluster.ReadEndpoint.Address

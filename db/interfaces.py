@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Any
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from services.redis.redis_client_interface import RedisClientInterface
 
 
 class DataBaseSessionInterface(ABC):
@@ -13,6 +14,10 @@ class DataBaseSessionInterface(ABC):
 class DataBaseInitializerInterface(ABC):
     @abstractmethod
     async def initialize_database(self):
+        pass
+
+    @abstractmethod
+    async def close_database(self):
         pass
 
 
@@ -35,8 +40,17 @@ class DeclarativeBaseInterface(ABC):
 
 
 class DataBaseRepositoryInterface(ABC):
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    @property
+    @abstractmethod
+    def get_session(self) -> AsyncSession:
+        """Get the current database session."""
+        pass
+
+    @property
+    @abstractmethod
+    async def get_total_count(self) -> int:
+        """Get the total count of items in the table."""
+        pass
 
     @abstractmethod
     async def get_all(self, limit: int = 0, offset: int = 0):
@@ -47,7 +61,7 @@ class DataBaseRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def find_unique(self, **kwargs):
+    async def find_unique(self, redis: Optional[RedisClientInterface], **kwargs):
         pass
 
     @abstractmethod
@@ -55,9 +69,9 @@ class DataBaseRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def create_one(self, resource):
+    async def create_one(self, resource: dict):
         pass
 
     @abstractmethod
-    async def update_one(self, resource):
+    async def update_one(self, resource: dict):
         pass

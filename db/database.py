@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from functools import lru_cache
+from fastapi import Depends
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Annotated
 from tenacity import after_log, before_log, retry, stop_after_attempt, wait_fixed
 
 from db.interfaces import \
@@ -23,9 +24,17 @@ wait_seconds = 10
 # engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
 
 
+def is_running_in_docker():
+    try:
+        with open("/proc/1/cgroup", "rt") as f:
+            return "docker" in f.read()
+    except FileNotFoundError:
+        return False
+
+
 @dataclass
 class DataBaseEngine(DataBaseEngineInterface):
-    engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
+    engine = create_async_engine(settings.ASYNC_DATABASE_URL_EXT)
 
     def get_engine(self) -> AsyncEngine:
         return self.engine
@@ -71,6 +80,9 @@ class DataBaseInitializer(DataBaseInitializerInterface):
             logger.error("Failed to initialize database", exc_info=e)
             raise e
 
+    async def close_database(self):
+        await self.engine.dispose()
+
 
 class DatabaseSession(DataBaseSessionInterface):
     def __init__(self, database_session: DataBaseSessionMakerInterface):
@@ -113,5 +125,13 @@ def get_database_session_maker():
 
 def get_database_initializer() -> DataBaseInitializerInterface:
     return DataBaseInitializer(get_database_engine(), get_declarative_base())
+
+
+async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
+    async with DatabaseSession(get_database_session_maker()) as session:
+        yield session
+
+
+database_session_dep = Annotated[AsyncSession, Depends(get_database_session)]
 
 

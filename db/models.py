@@ -34,8 +34,12 @@ class User(Base):
     posts: Mapped[List["Post"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     likes: Mapped[List["Like"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     comments: Mapped[List["Comment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    notifications: Mapped[List["Notifications"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
+        """Convert the User model to a dictionary \n
+           exclude: Set[str] = {} excludes the specified columns from the dictionary.
+        """
         return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
 
 
@@ -95,6 +99,24 @@ class Comment(Base):
     )
     user: Mapped["User"] = relationship(back_populates="comments")
     post: Mapped["Post"] = relationship(back_populates="comments")
+
+    def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
+
+
+class Notifications(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    type: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(Text)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    user: Mapped["User"] = relationship(back_populates="notifications")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
         return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
