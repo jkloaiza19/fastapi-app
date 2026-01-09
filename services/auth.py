@@ -59,11 +59,14 @@ class AuthClient(AuthClientInterface):
             jwt_util: JWTUtilInterface
     ) -> Dict:
         try:
+            user_exists = await user_repository.find_unique(username=user.username)
+
+            if user_exists:
+                raise Exception("User already exists")
+
             cognito_client.sign_up(user)
 
-            # new_user = User(**user.model_dump(exclude={"password"}), is_confirmed=False)
-
-            new_user = await user_repository.create_one(user)
+            new_user = await user_repository.create_one(user.model_dump(exclude={"password"}))
 
             background_tasks.add_task(
                 email_client.send_confirmation_email,

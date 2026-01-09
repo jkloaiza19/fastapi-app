@@ -15,7 +15,7 @@ class ThreadingUtil(ThreadingUtilInterface):
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.loop = asyncio.get_event_loop()
 
-    async def run_in_thread(self, func: Callable, *args: Any, **kwargs: Any) -> None:
+    async def run_in_thread(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
         """Run a blocking function in a thread pool."""
         return await self.loop.run_in_executor(self.executor, lambda: func(*args, **kwargs))
 

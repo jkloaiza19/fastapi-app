@@ -1,0 +1,17 @@
+aws cloudformation create-stack \
+  --stack-name notion-sync-lambda-stack \
+  --template-body file://cloudformation/notion_sync_lambda.yml \
+  --capabilities CAPABILITY_IAM \
+  --parameters \
+    ParameterKey=ArtifactS3Bucket,ParameterValue=fastapi-app-artifacts  \
+    ParameterKey=ArtifactS3Key,ParameterValue=notion_sync_lambda.zip \
+     ParameterKey=SecretName,ParameterValue=fastapi-dev-secrets
+
+aws cloudformation update-stack \
+  --stack-name notion-sync-lambda-stack \
+  --template-body file://cloudformation/notion_sync_lambda.yml \
+  --capabilities CAPABILITY_IAM \
+  --parameters \
+    ParameterKey=ArtifactS3Bucket,ParameterValue=fastapi-app-artifacts  \
+    ParameterKey=ArtifactS3Key,ParameterValue=notion_sync_lambda.zip \
+    ParameterKey=SecretName,ParameterValue=fastapi-dev-secrets

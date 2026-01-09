@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lambda to sync Notion DB pages into Astra DB (vector store)'
+
+Parameters:
+  ArtifactS3Bucket:
+    Type: String
+    Description: S3 bucket where the Lambda deployment zip is uploaded
+  ArtifactS3Key:
+    Type: String
+    Description: S3 key (path) to the uploaded zip artifact (e.g. notion_sync_lambda.zip)
+  SecretName:
+    Type: String
+    Description: Secrets Manager secret name containing all required credentials (Notion, OpenAI, Astra tokens)
+    Default: "notion-token"
+
+Resources:
+  NotionSyncLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: NotionSyncAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${ArtifactS3Bucket}/${ArtifactS3Key}
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretName}*'
+
+  NotionSyncLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: notion-sync-lambda
+      Handler: lambda_handler.handler
+      Runtime: python3.11
+      Role: !GetAtt NotionSyncLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactS3Bucket
+        S3Key: !Ref ArtifactS3Key
+      MemorySize: 1024
+      Timeout: 300
+      Environment:
+        Variables:
+          SECRET_NAME: !Ref SecretName
+
+  # EventBridge rule to trigger Lambda twice daily (8 AM and 8 PM UTC)
+  NotionSyncScheduleRuleMorning:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: notion-sync-schedule-morning
+      Description: Trigger Notion sync at 8 AM UTC daily
+      ScheduleExpression: cron(0 8 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NotionSyncLambda.Arn
+          Id: NotionSyncLambdaTargetMorning
+
+  NotionSyncScheduleRuleEvening:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: notion-sync-schedule-evening
+      Description: Trigger Notion sync at 8 PM UTC daily
+      ScheduleExpression: cron(0 20 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NotionSyncLambda.Arn
+          Id: NotionSyncLambdaTargetEvening
+
+  NotionSyncSchedulePermissionMorning:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NotionSyncLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NotionSyncScheduleRuleMorning.Arn
+
+  NotionSyncSchedulePermissionEvening:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NotionSyncLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NotionSyncScheduleRuleEvening.Arn
+
+Outputs:
+  LambdaFunctionName:
+    Description: Lambda function name
+    Value: !Ref NotionSyncLambda
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt NotionSyncLambda.Arn

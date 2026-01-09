@@ -44,6 +44,7 @@ from services.aws.open_search.open_search_client import OpenSearchClientInterfac
 
 # AI
 from services.AI.image_generator import get_image_generator_client, ImageGeneratorInterface
+from services.AI.chat_bot import get_chat_completion_service, OpenAIInterface
 
 logger = get_logger(__name__)
 
@@ -64,15 +65,15 @@ auth_dependency = Annotated[AuthClientInterface, Depends(get_auth_client)]
 
 
 # AI Dependencies
-def get_chat_completion_service(http_client: http_client_dep) -> AsyncGenerator[OpenAIInterface, None]:
-    try:
-        chat_completion = ChatCompletion(
-            http_client=http_client,
-        )
-        yield chat_completion
-    except Exception as e:
-        logger.error(str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to initialize AI service. {str(e)}")
+# def get_chat_completion_service(http_client: http_client_dep) -> AsyncGenerator[OpenAIInterface, None]:
+#     try:
+#         chat_completion = ChatCompletion(
+#             http_client=http_client,
+#         )
+#         yield chat_completion
+#     except Exception as e:
+#         logger.error(str(e))
+#         raise HTTPException(status_code=500, detail=f"Failed to initialize AI service. {str(e)}")
 
 
 chat_completion_dep = Annotated[OpenAIInterface, Depends(get_chat_completion_service)]

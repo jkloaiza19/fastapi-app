@@ -28,6 +28,7 @@ share/python-wheels/
 *.egg
 *.log
 *.json
+*.zip
 !zappa_settings.json
 
 # PyInstaller
@@ -39,7 +40,6 @@ share/python-wheels/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-commands.txt
 
 # Unit test / coverage reports
 htmlcov/

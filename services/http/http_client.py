@@ -1,4 +1,6 @@
 from json import JSONDecodeError
+import time
+import random
 from core.logger import get_logger
 from httpx import AsyncClient, HTTPStatusError, Timeout, Limits, RequestError, Response
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -93,9 +95,13 @@ class HttpClient(HttpClientInterface, ABC):
                     }
                 )
                 return await self.handle_response(response)
-        finally:
-            if isinstance(self.async_client, AsyncClient):
-                await self.async_client.aclose()
+
+        except HTTPStatusError as e:
+            logger.error(f"HTTP Status Error: {str(e)}")
+            raise
+        # finally:
+        #     if isinstance(self.async_client, AsyncClient):
+        #         await self.async_client.aclose()
 
     @RetryDecoratorWrapper.get_retry_decorator()
     async def get_request(
