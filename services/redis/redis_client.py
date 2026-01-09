@@ -23,11 +23,11 @@ class RedisClientInterface(ABC):
 
 class RedisClient(RedisClientInterface):
     def __init__(self, redis_url: str):
-        self.redis_client: AsyncRedis = redis.from_url(redis_url)
+        self.__redis_client: AsyncRedis = redis.from_url(redis_url)
 
     async def get_cached_data(self, key: str) -> Optional[Dict]:
         try:
-            data = await self.redis_client.get(key)
+            data = await self.__redis_client.get(key)
             if data:
                 return json.loads(data)
             return None
@@ -35,9 +35,9 @@ class RedisClient(RedisClientInterface):
             logger.error(f"Error retrieving cache for {key}: {e}")
             return None
 
-    async def set_cache_data(self, key: str, value: Optional[Union[str, int, bool, Dict]]):
+    async def set_cache_data(self, key: str, value: Optional[Union[str, int, bool, Dict]], ttl_sec: int = expire):
         try:
-            await self.redis_client.set(name=key, value=json.dumps(value), ex=expire)
+            await self.__redis_client.set(name=key, value=json.dumps(value), ex=ttl_sec)
         except Exception as e:
             logger.error(f"Error setting cache for {key}: {e}")
 

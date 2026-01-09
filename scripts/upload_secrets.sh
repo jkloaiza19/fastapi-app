@@ -1,5 +1,5 @@
 #!/bin/bash
-# chmod +x scripts/build_lambda.sh
+# chmod +x scripts/upload_secrets.sh
 
 SECRET_NAME="fastapi-dev-secrets"
 REGION="us-east-1"

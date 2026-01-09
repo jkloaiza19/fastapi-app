@@ -402,18 +402,17 @@ def load_config_from_env() -> SyncConfig:
         notion_concurrency=int(os.getenv("NOTION_CONCURRENCY", "3")), #settings.NOTION_CONCURRENCY)
     )
 
-async def run_sync() -> Dict[str, Any]:
+async def run_sync_threaded() -> Dict[str, Any]:
+    from utils.run_in_thread_util import get_threading_util
+
     cfg = load_config_from_env()
     sync = NotionAstraSync(cfg)
 
-    # Run the async sync.run() inside a thread-safe runner so callers that expect a threaded call
-    # don't accidentally get a coroutine object passed into the thread helper.
     def _runner():
         import asyncio as _asyncio
         return _asyncio.run(sync.run())
 
-    # result = await get_threading_util().run_in_thread(_runner)
-    result = _runner()
-    return result or {}
+    result = await get_threading_util().run_in_thread(_runner)
+    return result
 
 

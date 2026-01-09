@@ -70,6 +70,7 @@ aioredis = "^2.0.1"
 psycopg = {extras = ["binary"], version = "^3.3.2"}
 notion-client = "^2.7.0"
 astrapy = "^2.1.0"
+langchain-astradb = "^1.0.0"
 
 
 [build-system]

@@ -1,60 +1,43 @@
 #!/usr/bin/env bash
+# chmod +x scripts/build_lambda.sh
 set -euo pipefail
-
-# Build a Lambda deployment package zip for the Notion->Astra sync function.
-# Run this from the project root: /path/to/projects/fastapi-app
 
 REQ_FILE="lambda_handlers/notion_loader/requirements-lambda.txt"
 BUILD_DIR="build_lambda"
 OUTPUT_ZIP="notion_sync_lambda.zip"
 
 echo "Cleaning up previous build artifacts..."
-rm -rf "$BUILD_DIR" "$OUTPUT_ZIP" .venv_lambda
-mkdir -p "$BUILD_DIR"
+rm -rf "$BUILD_DIR" "$OUTPUT_ZIP"
 mkdir -p "$BUILD_DIR/utils"
 
-# Create a temporary virtualenv to ensure pip and wheel are available
-#python3 -m venv .venv_lambda
-#source .venv_lambda/bin/activate
-python -m pip install --upgrade pip wheel
+echo "Installing runtime requirements into $BUILD_DIR using Lambda-compatible Docker image..."
+#docker run --rm \
+#  -v "$PWD":/var/task \
+#  -w /var/task \
+#  public.ecr.aws/sam/build-python3.11 \
+#  /bin/bash -lc "pip install -U pip && pip install -r \"$REQ_FILE\" -t \"$BUILD_DIR\" --only-binary=:all:"
+docker run --rm \
+  --platform linux/amd64 \
+  -v "$PWD":/var/task \
+  -w /var/task \
+  public.ecr.aws/sam/build-python3.11 \
+  /bin/bash -lc "pip install -U pip && pip install -r \"$REQ_FILE\" -t \"$BUILD_DIR\" --only-binary=:all:"
+# pip install --platform manylinux2014_x86_64 --target=./package --implementation cp --python-version 3.12 --only-binary=:all: pydantic
 
-echo "Installing runtime requirements into $BUILD_DIR..."
-# Install only runtime dependencies into the build directory
-# pip install --upgrade pip && pip install -r requirements.txt -t build/python --only-binary=:all:
-docker run --rm -v "$PWD":/var/task public.ecr.aws/sam/build-python3.11
-pip install --upgrade pip && pip install -r "$REQ_FILE" -t "$BUILD_DIR" --only-binary=:all:
-
-# Copy project code into the build directory. Exclude .env, git, venvs, tests and large artifacts.
-# Adjust the rsync include/exclude list if you want a narrower footprint.
+echo "Copying lambda handler + project code..."
 cp lambda_handlers/notion_loader/lambda_handler.py "$BUILD_DIR/"
-cp utils/notion_loader.py "$BUILD_DIR/utils"
-#echo "Copying project files..."
-#rsync -a --prune-empty-dirs \
-#  --exclude '.venv' \
-#  --exclude '.venv_lambda' \
-#  --exclude '.git' \
-#  --exclude '__pycache__' \
-#  --exclude 'tests' \
-#  --exclude '*.pyc' \
-#  --exclude '.env' \
-#  --exclude 'node_modules' \
-#  --exclude 'build_lambda' \
-#  ./ "$BUILD_DIR/"
+cp utils/notion_loader.py "$BUILD_DIR/utils/"
 
-# Remove any virtualenvs or caches that accidentally got copied
-rm -rf "$BUILD_DIR/.venv" "$BUILD_DIR/.venv_lambda" "$BUILD_DIR/__pycache__"
+# Remove caches
+rm -rf "$BUILD_DIR/__pycache__" "$BUILD_DIR/utils/__pycache__"
 
-# Create the zip. Lambda requires files at the root of the zip
 echo "Creating ZIP: $OUTPUT_ZIP"
 pushd "$BUILD_DIR" > /dev/null
 zip -r9 "../$OUTPUT_ZIP" .
 popd > /dev/null
 
-# Cleanup local venv and artifacts used for building
-deactivate || true
-rm -rf .venv_lambda
-rm -rf "$BUILD_DIR"
-
 echo "Built $OUTPUT_ZIP"
+rm -rf $BUILD_DIR
 
-# unzip -l notion_sync_lambda.zip | grep -E "pydantic_core|_pydantic_core" | head -n 20
+echo "Sanity check (should be linux, not darwin):"
+unzip -l "$OUTPUT_ZIP" | grep -E "_pydantic_core.*\.so" | head -n 20

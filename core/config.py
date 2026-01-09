@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     NOTION_API_URL: Optional[str] = ""
     NOTION_CONCURRENCY: Optional[int] = 10
     NOTION_PAGE_IDS: Optional[List[str]] = None
+    LLM_MODEL: Optional[str] = ""
+    TOP_K: int = 8
+    CANDIDATES: int = 30
+    USE_LLM_RERANK: bool = True
     REDIS_URL: Optional[str] = "redis://localhost:6379"
     REDIS_CHANNEL: Optional[str] = ""
     REDIS_PASSWORD: Optional[str] = ""

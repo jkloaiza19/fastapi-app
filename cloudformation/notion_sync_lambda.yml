@@ -8,24 +8,10 @@ Parameters:
   ArtifactS3Key:
     Type: String
     Description: S3 key (path) to the uploaded zip artifact (e.g. notion_sync_lambda.zip)
-  NotionDatabaseId:
+  SecretName:
     Type: String
-    Description: Notion database id to sync
-  NotionSecretArn:
-    Type: String
-    Description: (Optional) Secrets Manager ARN that contains Notion token (can be empty string)
-    Default: ""
-  OpenAISecretArn:
-    Type: String
-    Description: (Optional) Secrets Manager ARN that contains OpenAI API key
-    Default: ""
-  AstraSecretArn:
-    Type: String
-    Description: (Optional) Secrets Manager ARN that contains Astra token
-    Default: ""
-  AstraEndpoint:
-    Type: String
-    Description: Astra DB endpoint URL
+    Description: Secrets Manager secret name containing all required credentials (Notion, OpenAI, Astra tokens)
+    Default: "notion-token"
 
 Resources:
   NotionSyncLambdaRole:
@@ -54,10 +40,7 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                   - secretsmanager:DescribeSecret
-                Resource:
-                  - !Ref NotionSecretArn
-                  - !Ref OpenAISecretArn
-                  - !Ref AstraSecretArn
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretName}*'
 
   NotionSyncLambda:
     Type: AWS::Lambda::Function
@@ -73,30 +56,46 @@ Resources:
       Timeout: 300
       Environment:
         Variables:
-          NOTION_DATABASE_ID: !Ref NotionDatabaseId
-          NOTION_SECRET_ARN: !Ref NotionSecretArn
-          OPENAI_SECRET_ARN: !Ref OpenAISecretArn
-          ASTRA_SECRET_ARN: !Ref AstraSecretArn
-          ASTRA_DB_ENDPOINT: !Ref AstraEndpoint
+          SECRET_NAME: !Ref SecretName
 
-  # Optional: Example scheduled invocation via EventBridge (run daily at 01:00 UTC)
-  NotionSyncScheduleRule:
+  # EventBridge rule to trigger Lambda twice daily (8 AM and 8 PM UTC)
+  NotionSyncScheduleRuleMorning:
     Type: AWS::Events::Rule
     Properties:
-      Name: notion-sync-schedule
-      ScheduleExpression: rate(24 hours)
+      Name: notion-sync-schedule-morning
+      Description: Trigger Notion sync at 8 AM UTC daily
+      ScheduleExpression: cron(0 8 * * ? *)
       State: ENABLED
       Targets:
         - Arn: !GetAtt NotionSyncLambda.Arn
-          Id: NotionSyncLambdaTarget
+          Id: NotionSyncLambdaTargetMorning
 
-  NotionSyncSchedulePermission:
+  NotionSyncScheduleRuleEvening:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: notion-sync-schedule-evening
+      Description: Trigger Notion sync at 8 PM UTC daily
+      ScheduleExpression: cron(0 20 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NotionSyncLambda.Arn
+          Id: NotionSyncLambdaTargetEvening
+
+  NotionSyncSchedulePermissionMorning:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref NotionSyncLambda
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt NotionSyncScheduleRule.Arn
+      SourceArn: !GetAtt NotionSyncScheduleRuleMorning.Arn
+
+  NotionSyncSchedulePermissionEvening:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NotionSyncLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NotionSyncScheduleRuleEvening.Arn
 
 Outputs:
   LambdaFunctionName:
