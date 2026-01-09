@@ -84,7 +84,7 @@ class GenericDataBaseRepository(DataBaseRepositoryInterface, Generic[T]):
             instance = result.scalar_one_or_none()
 
             if instance is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+                return None
 
             info_to_cache = instance.to_dict()
             redis_key = f"{self.__model.__name__.lower()}-{kwargs['id']}" if "id" in kwargs else None

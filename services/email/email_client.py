@@ -68,11 +68,12 @@ class EmailClient(EmailClientInterface):
             to: List[str],
             subject: str,
             body: str,
-            cc: Optional[List[str]] = [],
-            bcc: Optional[List[str]] = [],
+            cc: Optional[List[str]] = None,
+            bcc: Optional[List[str]] = None,
             message_type: MessageType = MessageType.html
     ) -> None:
         logger.info("Sending email")
+        print(f"Sending email to {to}")
         try:
             message = MessageSchema(
                 subject=subject,
@@ -84,6 +85,7 @@ class EmailClient(EmailClientInterface):
             )
 
             await self.fast_mail.send_message(message)
+            return None
         except ApiError as e:
             logger.error(f"Error sending email: {e}")
             raise e
@@ -105,11 +107,14 @@ class EmailClient(EmailClientInterface):
                 context={"username": username, "confirmation_link": confirmation_link}
             )
 
+            print("***************Sending confirmation email****************")
             await self.send_email(
                     to=[email],
                     subject="Successfully signed up!",
                     body=body_html,
             )
+            print("***************Confirmation email sent****************")
+            return None
         except ApiError as e:
             logger.error(f"Could not send the confirmation email {str(e)}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{str(e)}")

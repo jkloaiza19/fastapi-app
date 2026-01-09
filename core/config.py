@@ -1,6 +1,6 @@
 import json
 import secrets
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 import boto3
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,18 +37,32 @@ class Settings(BaseSettings):
     DEEP_AI_API_KEY: Optional[str] = ""
     OPENAI_API_KEY: Optional[str] = ""
     OPENAI_HTTP_URL: Optional[str] = ""
+    CHAT_COMPLETION_TEMPERATURE: Optional[int] = 0
+    CHAT_COMPLETION_MAX_TOKENS: Optional[int] = 1500
     CHAT_COMPLETION_MODEL: Optional[str] = "gpt-4o"
+    EMBED_MODEL: Optional[str] = ""
+    EMBED_DIM: Optional[int] = 1536
     COGNITO_USER_POOL_ID: Optional[str] = ""
     COGNITO_CLIENT_ID: Optional[str] = ""
     COGNITO_CLIENT_SECRET: Optional[str] = ""
     COGNITO_JWK_URL: Optional[str] = ""
     AWS_LOG_GROUP: Optional[str] = ""
     AWS_LOG_STREAM: Optional[str] = ""
+    AWS_CLOUDWATCH_REGION: Optional[str] = ""
     ASTRA_CLIENT_ID: Optional[str] = ""
     ASTRA_SECRET_KEY: Optional[str] = ""
     ASTRA_DB_NAMESPACE: Optional[str] = ""
     ASTRA_DB_TOKEN: Optional[str] = ""
     ASTRA_DB_ENDPOINT: Optional[str] = ""
+    ASTRA_KB_COLLECTION: Optional[str] = ""
+    ASTRA_STATE_COLLECTION: Optional[str] = ""
+    CHUNK_MAX_CHARS: Optional[int] = 1600
+    CHUNK_OVERLAP: Optional[int] = 200
+    NOTION_TOKEN: Optional[str] = ""
+    NOTION_DATABASE_ID: Optional[str] = ""
+    NOTION_API_URL: Optional[str] = ""
+    NOTION_CONCURRENCY: Optional[int] = 10
+    NOTION_PAGE_IDS: Optional[List[str]] = None
     REDIS_URL: Optional[str] = "redis://localhost:6379"
     REDIS_CHANNEL: Optional[str] = ""
     REDIS_PASSWORD: Optional[str] = ""

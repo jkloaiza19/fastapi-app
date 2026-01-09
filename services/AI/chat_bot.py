@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from typing import AsyncGenerator
 from core.logger import get_logger
 from core.config import settings
-from services.http.http_client import HttpClient
+from services.http.http_client import HttpClient, HttpClientSingleton
 from services.AI.interfaces import OpenAIInterface
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -25,7 +25,8 @@ class ChatCompletion(OpenAIInterface):
         self.base_url = settings.OPENAI_HTTP_URL
         self.api_key = settings.OPENAI_API_KEY
         self.model = settings.CHAT_COMPLETION_MODEL
-        self.temperature = 0
+        self.temperature = settings.CHAT_COMPLETION_TEMPERATURE
+        self.max_tokens = settings.CHAT_COMPLETION_MAX_TOKENS
         self.system_role = "You are a helpful and friendly assistant."
         self.headers = {"Authorization": f"Bearer {self.api_key}"}
 
@@ -38,6 +39,7 @@ class ChatCompletion(OpenAIInterface):
                     {"role": "system", "content": self.system_role},
                     {"role": "user", "content": prompt},
                 ],
+                "max_tokens":  self.max_tokens,
                 "temperature": self.temperature,
             }
 
@@ -56,9 +58,9 @@ class ChatCompletion(OpenAIInterface):
             )
 
 
-def get_chat_completion_service() -> AsyncGenerator[OpenAIInterface, None]:
+async def get_chat_completion_service() -> AsyncGenerator[OpenAIInterface, None]:
+    http_client = HttpClientSingleton.get_instance()
     try:
-        http_client = HttpClient()
         chat_completion = ChatCompletion(
             http_client=http_client,
         )
@@ -67,7 +69,7 @@ def get_chat_completion_service() -> AsyncGenerator[OpenAIInterface, None]:
         logger.error(str(e))
         raise e
     finally:
-        chat_completion.http_client.close()
+        await HttpClientSingleton.close_instance()
 
 
 def get_chat_completion(http_client: HttpClient) -> ChatCompletion:
