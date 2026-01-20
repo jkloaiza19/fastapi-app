@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +13,7 @@ from notion_client import AsyncClient as NotionAsyncClient
 from openai import AsyncOpenAI
 from astrapy import DataAPIClient
 from astrapy.constants import VectorMetric
+import tiktoken
 # from utils.run_in_thread_util import get_threading_util
 
 # from core.config import settings
@@ -30,7 +32,162 @@ def chunk_id(page_id: str, chunk_index: int, chunk_text: str) -> str:
 def normalize_spaces(s: str) -> str:
     return " ".join((s or "").split())
 
+def count_tokens(text: str, model: str = "text-embedding-3-small") -> int:
+    """Count tokens for a given text using tiktoken."""
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        # Fallback to cl100k_base encoding (used by most modern models)
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
+
+def split_into_sentences(text: str) -> List[str]:
+    """Split text into sentences, handling common edge cases."""
+    # Simple sentence splitter - can be improved with spaCy or NLTK for better accuracy
+    # Handles: periods, question marks, exclamation marks
+    # Preserves: abbreviations like "Dr.", "Mr.", URLs, etc.
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+    return [s.strip() for s in sentences if s.strip()]
+
+def chunk_text_smart(
+    text: str, 
+    max_tokens: int = 512,  # Most embedding models have 512-8192 token limits
+    overlap_tokens: int = 50,
+    model: str = "text-embedding-3-small",
+    max_bytes: int = 7500  # AstraDB limit is 8000, leave some margin
+) -> List[str]:
+    """
+    Intelligently chunk text by:
+    1. Respecting sentence boundaries (no mid-sentence cuts)
+    2. Using token count instead of character count
+    3. Adding semantic overlap between chunks
+    4. Preserving paragraph structure when possible
+    5. Enforcing byte size limits for database storage
+    """
+    text = normalize_spaces(text)
+    if not text:
+        return []
+    
+    # Check if entire text fits in one chunk (both tokens and bytes)
+    text_bytes = len(text.encode('utf-8'))
+    text_tokens = count_tokens(text, model)
+    
+    if text_tokens <= max_tokens and text_bytes <= max_bytes:
+        return [text]
+    
+    # Split by paragraphs first (preserve structure)
+    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+    
+    chunks = []
+    current_chunk = []
+    current_tokens = 0
+    current_bytes = 0
+    
+    for para in paragraphs:
+        para_tokens = count_tokens(para, model)
+        para_bytes = len(para.encode('utf-8'))
+        
+        # If single paragraph is too large, split by sentences
+        if para_tokens > max_tokens or para_bytes > max_bytes:
+            sentences = split_into_sentences(para)
+            
+            for sentence in sentences:
+                sentence_tokens = count_tokens(sentence, model)
+                sentence_bytes = len(sentence.encode('utf-8'))
+                
+                # If single sentence is still too large, split by words
+                if sentence_tokens > max_tokens or sentence_bytes > max_bytes:
+                    words = sentence.split()
+                    temp_chunk = []
+                    temp_tokens = 0
+                    temp_bytes = 0
+                    
+                    for word in words:
+                        word_tokens = count_tokens(word, model)
+                        word_bytes = len(word.encode('utf-8')) + 1  # +1 for space
+                        
+                        if temp_tokens + word_tokens > max_tokens or temp_bytes + word_bytes > max_bytes:
+                            if temp_chunk:
+                                chunks.append(' '.join(temp_chunk))
+                                # Keep overlap
+                                overlap_words = temp_chunk[-overlap_tokens:] if len(temp_chunk) > overlap_tokens else temp_chunk
+                                temp_chunk = overlap_words
+                                temp_tokens = count_tokens(' '.join(temp_chunk), model)
+                                temp_bytes = len(' '.join(temp_chunk).encode('utf-8'))
+                        temp_chunk.append(word)
+                        temp_tokens += word_tokens
+                        temp_bytes += word_bytes
+                    
+                    if temp_chunk:
+                        current_chunk.extend(temp_chunk)
+                        current_tokens = count_tokens(' '.join(current_chunk), model)
+                        current_bytes = len(' '.join(current_chunk).encode('utf-8'))
+                    continue
+                
+                # Check if adding this sentence would exceed limit
+                if current_tokens + sentence_tokens > max_tokens or current_bytes + sentence_bytes > max_bytes:
+                    if current_chunk:
+                        chunks.append(' '.join(current_chunk))
+                        # Add overlap: keep last few sentences
+                        overlap_text = ' '.join(current_chunk[-2:]) if len(current_chunk) >= 2 else ' '.join(current_chunk)
+                        current_chunk = [overlap_text, sentence]
+                        current_tokens = count_tokens(' '.join(current_chunk), model)
+                        current_bytes = len(' '.join(current_chunk).encode('utf-8'))
+                    else:
+                        current_chunk = [sentence]
+                        current_tokens = sentence_tokens
+                        current_bytes = sentence_bytes
+                else:
+                    current_chunk.append(sentence)
+                    current_tokens += sentence_tokens
+                    current_bytes += sentence_bytes
+        
+        # Paragraph fits in current chunk
+        elif current_tokens + para_tokens <= max_tokens and current_bytes + para_bytes <= max_bytes:
+            current_chunk.append(para)
+            current_tokens += para_tokens
+            current_bytes += para_bytes
+        
+        # Paragraph doesn't fit - start new chunk
+        else:
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
+                # Add overlap
+                overlap_text = current_chunk[-1] if current_chunk else ''
+                current_chunk = [overlap_text, para] if overlap_text else [para]
+                current_tokens = count_tokens(' '.join(current_chunk), model)
+                current_bytes = len(' '.join(current_chunk).encode('utf-8'))
+            else:
+                current_chunk = [para]
+                current_tokens = para_tokens
+                current_bytes = para_bytes
+    
+    # Add remaining chunk
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+    
+    # Final validation: ensure no chunk exceeds limits
+    validated_chunks = []
+    for chunk in chunks:
+        chunk_bytes = len(chunk.encode('utf-8'))
+        if chunk_bytes > max_bytes:
+            # Emergency split: this shouldn't happen but handle it
+            # Split by bytes directly
+            while chunk:
+                safe_chunk = chunk
+                while len(safe_chunk.encode('utf-8')) > max_bytes:
+                    # Binary search for safe length
+                    safe_chunk = safe_chunk[:len(safe_chunk)//2]
+                validated_chunks.append(safe_chunk.strip())
+                chunk = chunk[len(safe_chunk):].strip()
+        else:
+            validated_chunks.append(chunk)
+    
+    return [c.strip() for c in validated_chunks if c.strip()]
+
+# Keep old function for backward compatibility
 def chunk_text(text: str, max_chars: int = 1600, overlap: int = 200) -> List[str]:
+    """Legacy character-based chunking. Use chunk_text_smart() for better results."""
     text = normalize_spaces(text)
     if not text:
         return []
@@ -67,10 +224,64 @@ def blocks_to_text(blocks: List[Dict[str, Any]]) -> str:
             txt = extract_rich(b)
             if txt:
                 out.append(txt)
-        # Add more handlers here as your KB grows:
-        # elif t == "code": ...
-        # elif t == "toggle": ...
-        # elif t == "table": ...
+        elif t == "code":
+            # Extract code blocks with language context
+            code_data = b.get("code", {})
+            code_text = extract_rich(b)
+            language = code_data.get("language", "")
+            
+            if code_text:
+                # Format with markdown-style code fence for better embedding context
+                if language:
+                    out.append(f"```{language}")
+                    out.append(code_text)
+                    out.append("```")
+                else:
+                    out.append(f"Code:")
+                    out.append(code_text)
+                out.append("")  # spacing
+        elif t == "toggle":
+            # Extract toggle content (collapsible sections)
+            txt = extract_rich(b)
+            if txt:
+                out.append(f"Toggle: {txt}")
+        elif t == "table":
+            # Basic table handling - extract table rows
+            table_data = b.get("table", {})
+            has_column_header = table_data.get("has_column_header", False)
+            has_row_header = table_data.get("has_row_header", False)
+            # Note: Table cells are in children blocks, would need recursive fetch
+            out.append("Table:")
+        elif t == "table_row":
+            # Extract table row cells
+            cells = b.get("table_row", {}).get("cells", [])
+            row_text = " | ".join(
+                "".join(cell.get("plain_text", "") for cell in rich_text_list)
+                for rich_text_list in cells
+            )
+            if row_text:
+                out.append(row_text)
+        elif t == "equation":
+            # Include mathematical equations
+            equation = b.get("equation", {}).get("expression", "")
+            if equation:
+                out.append(f"Equation: {equation}")
+        elif t == "divider":
+            # Visual separator
+            out.append("---")
+        elif t == "bookmark":
+            # Extract bookmarked URLs with caption
+            bookmark = b.get("bookmark", {})
+            url = bookmark.get("url", "")
+            caption = "".join(
+                x.get("plain_text", "") for x in bookmark.get("caption", [])
+            ).strip()
+            if url:
+                out.append(f"Link: {url}" + (f" - {caption}" if caption else ""))
+        # Add more handlers as needed:
+        # elif t == "image": ... (extract caption)
+        # elif t == "video": ... (extract caption/transcript)
+        # elif t == "pdf": ...
     return "\n".join(out).strip()
 
 
@@ -130,6 +341,9 @@ class SyncConfig:
     # Chunking
     chunk_max_chars: int = 1600
     chunk_overlap: int = 200
+    
+    # Force re-sync flag
+    force_sync: bool = True  # If True, re-process all pages regardless of last_edited_time
 
 
 class NotionAstraSync:
@@ -227,7 +441,7 @@ class NotionAstraSync:
 
         # 2) Check incremental sync state
         prev = self.get_state(page_id)
-        if prev and prev.get("last_edited_time") == last_edited_time:
+        if not self.cfg.force_sync and prev and prev.get("last_edited_time") == last_edited_time:
             return {"page_id": page_id, "status": "unchanged"}
 
         # 3) Fetch blocks + render to text
@@ -236,8 +450,20 @@ class NotionAstraSync:
         if not text.strip():
             return {"page_id": page_id, "status": "skipped", "reason": "empty_content"}
 
-        # 4) Chunk
-        chunks = chunk_text(text, self.cfg.chunk_max_chars, self.cfg.chunk_overlap)
+        # 4) Chunk (using smart token-aware chunking)
+        # AstraDB has 8000 byte limit for indexed strings
+        # Use conservative limits to stay well under the cap
+        max_tokens = min(300, self.cfg.chunk_max_chars // 4)  # Cap at 300 tokens (~1200 chars)
+        overlap_tokens = min(50, self.cfg.chunk_overlap // 4)
+        
+        chunks = chunk_text_smart(
+            text, 
+            max_tokens=max_tokens,
+            overlap_tokens=overlap_tokens,
+            model=self.cfg.embed_model,
+            max_bytes=7500  # AstraDB limit is 8000, use 7500 for safety margin
+        )
+        
         if not chunks:
             return {"page_id": page_id, "status": "skipped", "reason": "no_chunks"}
 
@@ -400,6 +626,7 @@ def load_config_from_env() -> SyncConfig:
         chunk_max_chars=int(os.getenv("CHUNK_MAX_CHARS", "1600")), #settings.CHUNK_MAX_CHARS
         chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")), #settings.CHUNK_OVERLAP
         notion_concurrency=int(os.getenv("NOTION_CONCURRENCY", "3")), #settings.NOTION_CONCURRENCY)
+        force_sync=os.getenv("FORCE_SYNC", "false").lower() in ("true", "1", "yes"),
     )
 
 async def run_sync_threaded() -> Dict[str, Any]:

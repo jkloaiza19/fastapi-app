@@ -1,12 +1,7 @@
-Query notion API:
-curl -X POST 'https://api.notion.com/v1/databases/2d319e34440c80038183ef1e2f5fbb1e/query' \
-  -H 'Authorization: Bearer ntn_p6949192716b8fphhvI3QubNdnJvgSHl4cz1sxwLSgi4C7' \
-  -H 'Notion-Version: 2022-06-28' \
-  -H 'Content-Type: application/json' \
-  --data '{
-    "page_size": 100
-  }'
-
  To generate 32 URL-safe base64-encoded random bytes on a Mac:
 openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 
+curl -X POST http://localhost:8000/api/v1/AI/rag/ask \
+  -H "X-API-Key: your-generated-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "test"}'
