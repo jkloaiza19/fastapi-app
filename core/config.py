@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     OPENSEARCH_PORT: Optional[int] = 9200
     OPEN_SEARCH_USERNAME: Optional[str] = ""
     OPENSEARCH_INITIAL_ADMIN_PASSWORD: Optional[str] = ""
+    API_KEYS: Optional[str] = ""  # Comma-separated API keys or store in AWS Secrets Manager
 
     def is_local_environment(self) -> bool:
         return self.ENVIRONMENT == "local"

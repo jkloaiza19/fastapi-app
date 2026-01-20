@@ -130,7 +130,6 @@ app.include_router(graphql_app, prefix="/graphql")
 def health_check(request: Request):
     return {"result": "Success"}
 
-
 html = """
 <!DOCTYPE html>
 <html>
