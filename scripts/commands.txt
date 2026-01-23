@@ -5,3 +5,8 @@ curl -X POST http://localhost:8000/api/v1/AI/rag/ask \
   -H "X-API-Key: your-generated-key-here" \
   -H "Content-Type: application/json" \
   -d '{"question": "test"}'
+
+
+curl -X POST "http://localhost:8000/api/v1/ocr/extract?lang=eng&psm=6&return_boxes=true" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/image.png"
