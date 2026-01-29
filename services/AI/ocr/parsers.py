@@ -1,185 +1,250 @@
-from __future__ import annotations
-
 import re
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Literal, Optional
 
-MRZ_LINE_RE = re.compile(r"^[A-Z0-9<]{30,}$")
+MONTHS = {
+    "jan": "01","feb":"02","mar":"03","apr":"04","may":"05","jun":"06",
+    "jul":"07","aug":"08","sep":"09","sept":"09","oct":"10","nov":"11","dec":"12"
+}
+DocType = Literal["passport", "national_id", "driver_license", "unknown"]
+SourceType = Literal["mrz", "aamva_pdf417", "labels"]
 
+@dataclass
+class PassportData:
+    """Structured passport data"""
+    document_type: Optional[str] = None
+    passport_number: Optional[str] = None
+    surname: Optional[str] = None
+    given_names: Optional[str] = None
+    nationality: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    sex: Optional[str] = None
+    place_of_birth: Optional[str] = None
+    date_of_issue: Optional[str] = None
+    date_of_expiry: Optional[str] = None
+    issuing_authority: Optional[str] = None
+    country_code: Optional[str] = None
+    doc_type: Optional[str] = None
+    issuer: Optional[str] = None
+    personal_number: Optional[str] = None
+    has_expired: Optional[bool] = None
+    def to_dict(self) -> dict:
+        return {k: v for k, v in self.__dict__.items() if v is not None}    
 
-def _norm(s: str) -> str:
-    return re.sub(r"[^A-Z0-9<]", "", s.upper())
+def normalize_ocr(text: str) -> str:
+    # unify whitespace and common OCR quirks
+    t = text.replace("\r", "\n")
+    t = re.sub(r"[ \t]+", " ", t)
+    # normalize funky quotes/apostrophes
+    t = t.replace("’", "'").replace("`", "'")
+    return t
 
+def find_mrz_lines(text: str):
+    # MRZ lines usually have many '<' and are mainly A-Z0-9<
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    candidates = []
+    for ln in lines:
+        # remove spaces in-case OCR inserted them
+        compact = ln.replace(" ", "")
+        if compact.count("<") >= 5 and re.fullmatch(r"[A-Z0-9<]+", compact):
+            candidates.append(compact)
+    return candidates
 
-def _fix_digits_for_codes(s: str) -> str:
-    # Fix common OCR digit→letter confusions in country codes / nationality
-    return s.replace("5", "S").replace("0", "O").replace("1", "I").replace("2", "Z").replace("8", "B")
+def mrz_check_digit(s: str) -> str:
+    # ICAO 9303 check digit calculation
+    values = {**{str(i): i for i in range(10)},
+              **{chr(ord('A')+i): 10+i for i in range(26)},
+              '<': 0}
+    weights = [7, 3, 1]
+    total = 0
+    for i, ch in enumerate(s):
+        total += values.get(ch, 0) * weights[i % 3]
+    return str(total % 10)
 
-
-def _find_mrz_lines_raw(text: str) -> Tuple[Optional[str], Optional[str]]:
-    # Keep raw lines for parsing names; use normalized copies only for detection
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    norm = [_norm(l) for l in lines]
-    # line1: last starting with P<
-    l1_idx = next((len(norm) - 1 - i for i, x in enumerate(reversed(norm)) if x.startswith("P<")), None)
-    # line2: last MRZ-like with a 6-digit run
-    l2_idx = None
-    for i, x in enumerate(reversed(norm)):
-        if MRZ_LINE_RE.match(x) and re.search(r"\d{6}", x):
-            l2_idx = len(norm) - 1 - i
-            break
-    raw_l1 = lines[l1_idx] if l1_idx is not None else None
-    raw_l2 = lines[l2_idx] if l2_idx is not None else None
-    return raw_l1, raw_l2
-
-
-def _parse_yyMMdd(yyMMdd: str) -> Optional[str]:
-    if not re.match(r"^\d{6}$", yyMMdd):
+def parse_date_yyMMdd(yyMMdd: str) -> Optional[str]:
+    # MRZ dates are YYMMDD; century is inferred (common approach)
+    if not re.fullmatch(r"\d{6}", yyMMdd):
         return None
-    yy = int(yyMMdd[0:2]); mm = int(yyMMdd[2:4]); dd = int(yyMMdd[4:6])
-    if not (1 <= mm <= 12 and 1 <= dd <= 31):
-        return None
-    cur_two = int(datetime.utcnow().strftime("%y"))
-    century = 1900 if yy > cur_two else 2000
+    yy = int(yyMMdd[:2])
+    mm = int(yyMMdd[2:4])
+    dd = int(yyMMdd[4:6])
+
+    # heuristic: passport DOB likely in past; expiry likely near future.
+    # We'll just map 00-29 -> 2000-2029, else 1900-1999 (adjust as needed).
+    year = 2000 + yy if yy <= 29 else 1900 + yy
     try:
-        return datetime(century + yy, mm, dd).strftime("%Y-%m-%d")
-    except Exception:
+        return datetime(year, mm, dd).date().isoformat()
+    except ValueError:
         return None
 
+def parse_mrz_td3(line1: str, line2: str) -> PassportData:
+    # TD3 format expects 44 chars each, but OCR may alter length slightly.
+    # We'll pad/truncate to 44 to be forgiving.
+    def fix_len(s): 
+        s = s.replace(" ", "")
+        return (s + "<"*44)[:44]
 
-def _normalize_date_ocr(s: str) -> str:
-    return s.replace("I", "1").replace("l", "1").replace("O", "0").replace("S", "5").strip()
+    l1 = fix_len(line1)
+    l2 = fix_len(line2)
 
+    info = PassportData()
+    info.doc_type = l1[0]  # usually 'P'
+    info.issuer = l1[2:5].replace("<", "")
 
-def _parse_date_flexible(s: str) -> Optional[str]:
-    s = _normalize_date_ocr(s)
-    fmts = ["%d %b %Y", "%d %B %Y", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y-%m-%d", "%m/%d/%Y"]
-    for f in fmts:
-        try:
-            return datetime.strptime(s, f).strftime("%Y-%m-%d")
-        except Exception:
-            pass
-    m = re.match(r"^(\d{2})(\d{2})(\d{4})$", s)
+    # Names: after issuer, format SURNAME<<GIVEN<NAMES
+    names_raw = l1[5:].strip("<")
+    parts = names_raw.split("<<", 1)
+    surname = parts[0].replace("<", " ").strip() if parts else None
+    given = parts[1].replace("<", " ").strip() if len(parts) > 1 else None
+    info.surname = surname or None
+    info.given_names = given or None
+
+    passport_number = l2[0:9].replace("<", "")
+    passport_number_cd = l2[9]
+    nationality = l2[10:13].replace("<", "")
+    dob = l2[13:19]
+    dob_cd = l2[19]
+    sex = l2[20].replace("<", "")
+    expiry = l2[21:27]
+    expiry_cd = l2[27]
+
+    # Optional: validate check digits if present (not always reliable with OCR)
+    if re.fullmatch(r"[A-Z0-9<]{9}", l2[0:9]) and passport_number_cd.isdigit():
+        if mrz_check_digit(l2[0:9]) == passport_number_cd:
+            info.passport_number = passport_number
+        else:
+            # still keep it if it's plausible
+            info.passport_number = passport_number or None
+    else:
+        info.passport_number = passport_number or None
+
+    info.nationality = nationality or None
+    info.date_of_birth = parse_date_yyMMdd(dob)
+    info.sex = sex or None
+    info.date_of_expiry = parse_date_yyMMdd(expiry)
+
+    return info
+
+def parse_date_human(s: str) -> Optional[str]:
+    # Handles "21 Sep 1993", "12 Jan 2028", etc.
+    s = s.strip()
+    m = re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,4})\s+(\d{4})\b", s)
+    if not m:
+        return None
+    dd, mon, yyyy = m.group(1), m.group(2).lower(), m.group(3)
+    mon = MONTHS.get(mon[:4], MONTHS.get(mon[:3]))
+    if not mon:
+        return None
+    try:
+        return datetime(int(yyyy), int(mon), int(dd)).date().isoformat()
+    except ValueError:
+        return None
+
+def extract_by_labels(text: str) -> PassportData:
+    t = normalize_ocr(text)
+    info = PassportData()
+
+    # Surname (very noisy in OCR; try multiple anchors)
+    m = re.search(r"\bSurname\b.*?\n([A-Z][A-Z' ]{2,})", t, re.IGNORECASE | re.DOTALL)
+    if m: info.surname = m.group(1).strip().replace("  ", " ")
+
+    m = re.search(r"\bGiven\s+Names?\b.*?\n([A-Z][A-Z' ]{2,})", t, re.IGNORECASE | re.DOTALL)
+    if m: info.given_names = m.group(1).strip().replace("  ", " ")
+
+    m = re.search(r"\bNationality\b.*?\n([A-Z' ]{3,})", t, re.IGNORECASE | re.DOTALL)
+    if m: info.nationality = re.sub(r"\s+", " ", m.group(1)).strip()
+
+    m = re.search(r"\bDate\s+of\s+birth\b.*?\n(.+)", t, re.IGNORECASE)
     if m:
-        d, mth, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        try:
-            return datetime(y, mth, d).strftime("%Y-%m-%d")
-        except Exception:
-            return None
-    return None
+        info.date_of_birth = parse_date_human(m.group(1))
+
+    m = re.search(r"\bdate\s+of\s+expir", t, re.IGNORECASE)
+    if m:
+        # grab a couple lines after it
+        tail = t[m.start():m.start()+120]
+        d = parse_date_human(tail)
+        if d: info.date_of_expiry = d
+
+    return info
+
+# Main extraction function 
+def _only_mrz_chars(s: str) -> str:
+    # Keep MRZ alphabet only; convert common OCR separators to nothing
+    s = s.upper().replace(" ", "").replace("_", "<")
+    return re.sub(r"[^A-Z0-9<]", "", s)
+
+def _parse_date_yyMMdd(yyMMdd: str) -> str:
+    # TD3 uses YYMMDD; infer century (standard heuristic)
+    yy = int(yyMMdd[:2]); mm = int(yyMMdd[2:4]); dd = int(yyMMdd[4:6])
+    year = 2000 + yy if yy <= 29 else 1900 + yy
+    return datetime(year, mm, dd).date().isoformat()
+
+def extract_mrz_lines(ocr_text: str) -> tuple[str, str]:
+    t = ocr_text.replace("\r", "\n")
+    lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
+
+    # Candidate line1: starts with P< (often has names)
+    line1 = None
+    for ln in lines:
+        c = _only_mrz_chars(ln)
+        if c.startswith("P<") and len(c) >= 10:
+            line1 = c
+            break
+
+    # Candidate line2: exactly 44 MRZ chars (TD3 passports)
+    line2 = None
+    for ln in lines:
+        c = _only_mrz_chars(ln)
+        if len(c) == 44 and re.fullmatch(r"[A-Z0-9<]{44}", c):
+            line2 = c
+            break
+
+    if not line1 or not line2:
+        raise ValueError("Could not find complete MRZ (need a P< line and a 44-char line).")
+
+    # TD3 lines are 44 chars; pad/truncate line1 to be safe
+    line1 = (line1 + "<" * 44)[:44]
+    return line1, line2
+
+def parse_td3_mrz(line1: str, line2: str) -> PassportData:
+    # Line 1
+    document_type = line1[0]
+    issuer = line1[2:5].replace("<", "")
+    names_raw = line1[5:].strip("<")
+    surname_part, given_part = (names_raw.split("<<", 1) + [""])[:2]
+    surname = surname_part.replace("<", " ").strip()
+    given_names = given_part.replace("<", " ").strip()
+
+    # Line 2
+    passport_number = line2[0:9].replace("<", "")
+    nationality = line2[10:13].replace("<", "")
+    dob = _parse_date_yyMMdd(line2[13:19])
+    sex = line2[20].replace("<", "")
+    exp = _parse_date_yyMMdd(line2[21:27])
+    personal_number = line2[28:42]
+    has_expired = exp < datetime.now().date().isoformat()
+
+    return PassportData(
+        document_type=document_type,
+        issuer=issuer,
+        surname=surname,
+        given_names=given_names,
+        passport_number=passport_number,
+        nationality=nationality,
+        date_of_birth=dob,
+        sex=sex,
+        date_of_expiry=exp,
+        personal_number=personal_number,
+        has_expired=has_expired
+    )
+
+def extract_passport_from_ocr(ocr_text: str) -> PassportData:
+    print(F"Extracting passport data from OCR text...{ocr_text}")
+    l1, l2 = extract_mrz_lines(ocr_text)
+    print(F"MRZ Lines found:\nL1: {l1}\nL2: {l2}")
+    data = parse_td3_mrz(l1, l2)
+    print(F"Parsed Passport Data: {data}")
+    return data
 
 
-def parse_mrz(text: str) -> Dict[str, Optional[str]]:
-    out: Dict[str, Optional[str]] = {
-        "passport_number": None,
-        "surname": None,
-        "given_names": None,
-        "nationality": None,
-        "sex": None,
-        "date_of_birth": None,
-        "expiration_date": None,
-        "issuing_country": None,
-    }
-    raw_l1, raw_l2 = _find_mrz_lines_raw(text)
-    if not raw_l1 and not raw_l2:
-        return out
-
-    # Line 1: parse names and issuing country from RAW (no digit swaps)
-    if raw_l1 and raw_l1.strip().upper().startswith("P<"):
-        norm_l1 = _norm(raw_l1)[:44].ljust(44, "<")
-        out["issuing_country"] = _fix_digits_for_codes(norm_l1[2:5]).replace("<", "") or None
-        # After P<CCC, names with << separator and < as spaces
-        name_section = raw_l1.strip()[5:]
-        parts = name_section.split("<<", 1)
-        surname = parts[0].replace("<", " ").strip()
-        given = parts[1].replace("<", " ").strip() if len(parts) > 1 else None
-        out["surname"] = surname or None
-        out["given_names"] = given or None
-
-    # Line 2: parse numbers/dates from normalized copy
-    if raw_l2:
-        l2 = _norm(raw_l2)[:44].ljust(44, "<")
-        pn = l2[0:9].replace("<", "").strip() or None
-        out["passport_number"] = pn
-        out["nationality"] = _fix_digits_for_codes(l2[10:13]).replace("<", "") or None
-        out["date_of_birth"] = _parse_yyMMdd(l2[13:19])
-        out["sex"] = {"M": "M", "F": "F"}.get(l2[20], "X")
-        out["expiration_date"] = _parse_yyMMdd(l2[21:27])
-
-    return out
-
-
-def heuristic_passport(text: str) -> Dict[str, Optional[str]]:
-    def pick_inline(patterns: List[str]) -> Optional[str]:
-        for p in patterns:
-            m = re.search(p, text, flags=re.I)
-            if m:
-                return m.group(1).strip()
-        return None
-
-    def pick_next_line(labels: List[str]) -> Optional[str]:
-        lines = [l.strip() for l in text.splitlines()]
-        for i, l in enumerate(lines):
-            for lp in labels:
-                if re.search(lp, l, flags=re.I):
-                    if i + 1 < len(lines):
-                        nxt = re.sub(r"^[\-\:\s'’]+", "", lines[i + 1]).strip()
-                        return nxt
-        return None
-
-    # Passport number: require digits to avoid capturing "PASAPORTE"
-    passport_number = pick_inline([
-        r"Passport\s*(?:No\.?|Number)[:\s]*([A-Z0-9][A-Z0-9\s]{5,12})",
-        r"Document\s*(?:No\.?|Number)[:\s]*([A-Z0-9][A-Z0-9\s]{5,12})",
-    ])
-    if not passport_number:
-        pn_next = pick_next_line([r"Passport\s*(?:No\.?|Number)", r"Document\s*(?:No\.?|Number)"])
-        if pn_next and re.search(r"\d", pn_next):
-            passport_number = pn_next
-    if passport_number:
-        passport_number = re.sub(r"\s+", "", passport_number)
-
-    nationality = pick_inline([r"\bNationality\b[:\s]*([A-Z][A-Za-z\s]{2,})"]) or pick_next_line([r"\bNationality\b"])
-    if nationality:
-        nationality = re.sub(r"^[Aa]\s+", "", nationality).strip()
-
-    place_of_birth = pick_inline([r"(?:Place\s*of\s*Birth)[:\s]*([A-Za-z\s\-\(\)]{3,})"]) or pick_next_line([r"Place\s*of\s*Birth"])
-
-    date_pat = r"([0-9]{1,2}[\-\/\. ][0-9]{1,2}[\-\/\. ][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,}\s+[0-9]{4})"
-    dob_raw = pick_inline([rf"(?:Date\s*of\s*Birth|DOB)[:\s'\-]*{date_pat}"]) or pick_next_line([r"Date\s*of\s*Birth", r"\bDOB\b"])
-    exp_raw = pick_inline([rf"(?:Date\s*of\s*Expiry|Expiry|Expires)[:\s'\-]*{date_pat}"]) or pick_next_line([r"(?:Date\s*of\s*Expiry|Expiry|Expires)"])
-    iss_raw = pick_inline([rf"(?:Date\s*of\s*Issue|Issued\s*On)[:\s'\-]*{date_pat}"]) or pick_next_line([r"(?:Date\s*of\s*Issue|Issued\s*On)"])
-
-    surname = pick_inline([r"(?:Surname|Last\s*Name)[:\s]*([A-Z][A-Za-z\-\s]{1,})"]) or pick_next_line([r"(?:Surname|Last\s*Name)"])
-    given_names = pick_inline([r"(?:Given\s*Names?|First\s*Name)[:\s]*([A-Z][A-Za-z\-\s]{1,})"]) or pick_next_line([r"(?:Given\s*Names?|First\s*Name)"])
-    sex = pick_inline([r"(?:Sex|Gender)[:\s]*([MF])"]) or pick_next_line([r"(?:Sex|Gender)"])
-
-    return {
-        "passport_number": passport_number if (passport_number and re.search(r"\d", passport_number)) else None,
-        "surname": surname,
-        "given_names": given_names,
-        "nationality": nationality,
-        "sex": (sex if sex in ("M", "F") else None),
-        "date_of_birth": _parse_date_flexible(dob_raw) if dob_raw else None,
-        "expiration_date": _parse_date_flexible(exp_raw) if exp_raw else None,
-        "issue_date": _parse_date_flexible(iss_raw) if iss_raw else None,
-        "issuing_country": None,
-        "place_of_birth": place_of_birth,
-    }
-
-
-def extract_passport_fields(text: str, mrz_text: Optional[str] = None) -> Dict[str, Optional[str]]:
-    mrz = parse_mrz(mrz_text or "") if mrz_text else {}
-    heur = heuristic_passport(text)
-    return {
-        "passport_number": mrz.get("passport_number") or heur.get("passport_number"),
-        "surname": mrz.get("surname") or heur.get("surname"),
-        "given_names": mrz.get("given_names") or heur.get("given_names"),
-        "nationality": mrz.get("nationality") or heur.get("nationality"),
-        "sex": mrz.get("sex") or heur.get("sex"),
-        "date_of_birth": mrz.get("date_of_birth") or heur.get("date_of_birth"),
-        "expiration_date": mrz.get("expiration_date") or heur.get("expiration_date"),
-        "issue_date": heur.get("issue_date"),
-        "issuing_country": mrz.get("issuing_country") or heur.get("issuing_country"),
-        "place_of_birth": heur.get("place_of_birth"),
-    }

@@ -4,7 +4,7 @@ from typing import Optional, Literal
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from services.AI.ocr.ocr2 import OCRConfig, extract_text, extract_text_pdf
+from services.AI.ocr.ocr import OCRConfig, extract_text, extract_text_pdf
 
 router = APIRouter()
 
