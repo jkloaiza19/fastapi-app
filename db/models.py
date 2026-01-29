@@ -35,6 +35,7 @@ class User(Base):
     likes: Mapped[List["Like"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     comments: Mapped[List["Comment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     notifications: Mapped[List["Notifications"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    feedback: Mapped[List["Feedback"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
         """Convert the User model to a dictionary \n

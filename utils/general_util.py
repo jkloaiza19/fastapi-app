@@ -8,7 +8,14 @@ logger = get_logger(__name__)
 
 
 def serialize_response(response):
-    if hasattr(response, "model_dump"):  # Pydantic v2
+    # Handle Starlette Response objects
+    if hasattr(response, "body"):
+        import json
+        try:
+            return json.loads(response.body.decode())
+        except (json.JSONDecodeError, AttributeError):
+            return str(response.body)
+    elif hasattr(response, "model_dump"):  # Pydantic v2
         return response.model_dump()
     elif hasattr(response, "dict"):  # Pydantic v1
         return response.dict()

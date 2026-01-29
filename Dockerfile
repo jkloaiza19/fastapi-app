@@ -1,5 +1,5 @@
-# Use an official lightweight Python image
-FROM python:3.11-slim
+# Use an official lightweight Python image from AWS ECR Public
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Set environment variables
 ENV POETRY_VERSION=1.8.4 \
@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     curl \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
@@ -38,8 +40,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . .
 
-# Copy environment variables from AWS Secrets Manager
-COPY .env /app/.env
+# Note: .env file is not copied as environment variables should be provided at runtime
+# For local development, mount .env as a volume: -v $(pwd)/.env:/app/.env
+# For production, use container orchestration secrets or environment variables
 
 # Expose the port FastAPI will run on
 EXPOSE 8000
