@@ -120,3 +120,18 @@ class Notifications(Base):
 
     def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
         return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
+    
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    liked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    user: Mapped["User"] = relationship(back_populates="feedback")
+    def to_dict(self, exclude: Optional[Set[str]] = {}) -> Dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in exclude}
