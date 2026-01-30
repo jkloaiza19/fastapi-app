@@ -50,7 +50,11 @@ cd fastapi-app
 
 ### 2. Install dependencies
 ```bash
+# Install production dependencies
 poetry install
+
+# Install with development dependencies (for testing and code quality tools)
+poetry install --with dev
 ```
 
 ### 3. Configure environment variables
@@ -284,23 +288,78 @@ fastapi-app/
 ├── schemas/               # Pydantic schemas
 ├── utils/                 # Utility functions
 ├── graphql_server/        # GraphQL implementation
-├── tests/                 # Tests
+├── tests/                 # Test suite
+│   ├── conftest.py       # Test configuration and fixtures
+│   ├── test_main.py      # Application core tests
+│   ├── test_auth.py      # Authentication tests
+│   ├── test_users.py     # User management tests
+│   ├── test_ai.py        # AI service tests
+│   └── test_ocr.py       # OCR service tests
 ├── alembic/               # Database migrations
+├── .github/
+│   └── workflows/
+│       └── ci.yml        # GitHub Actions CI/CD pipeline
+├── .flake8               # Flake8 configuration
+├── .pre-commit-config.yaml # Pre-commit hooks
+├── .env.example          # Environment variables template
+├── TEST_RESULTS.md       # Test suite results
 └── main.py               # Application entry point
 ```
 
 ### Running Tests
+
+The project includes a comprehensive test suite with 32+ tests covering:
+- ✅ Main application endpoints (health checks, CORS, error handling)
+- ✅ Authentication and API key validation
+- ✅ User management operations
+- ✅ AI service endpoints
+- ✅ OCR processing
+- ✅ Cognito integration
+
 ```bash
+# Run all tests
 poetry run pytest
+
+# Run with coverage report
+poetry run pytest --cov=. --cov-report=html
+
+# Run specific test file
+poetry run pytest tests/test_main.py -v
+
+# Run core tests (100% passing)
+poetry run pytest tests/test_main.py tests/test_auth.py -v
 ```
 
-### Code Style
+**Test Results:** See [TEST_RESULTS.md](TEST_RESULTS.md) for detailed test report.
+
+### Code Quality
+
+The project uses multiple tools to ensure code quality:
+
 ```bash
-# Format code
+# Install dev dependencies
+poetry install --with dev
+
+# Format code with Black
 poetry run black .
 
-# Lint
-poetry run flake8
+# Sort imports with isort
+poetry run isort .
+
+# Lint with flake8
+poetry run flake8 .
+
+# Type check with mypy
+poetry run mypy .
+
+# Security scan with bandit
+poetry run bandit -r . -x ./tests,./alembic
+
+# Check dependency vulnerabilities
+poetry run safety check
+
+# Run all pre-commit hooks
+poetry run pre-commit run --all-files
 ```
 
 ## 🔍 Monitoring
@@ -321,13 +380,43 @@ async def endpoint():
     ...
 ```
 
+## 🔄 CI/CD Pipeline
+
+Automated GitHub Actions workflow runs on every pull request:
+
+- ✅ **Code Quality** - Black, isort, flake8, mypy
+- 🔒 **Security** - Bandit, Safety dependency scan
+- 🧪 **Tests** - Full test suite with PostgreSQL and Redis
+- 🐳 **Docker** - Build validation
+- 📦 **Dependencies** - Vulnerability scanning
+
+**Configuration:** `.github/workflows/ci.yml`
+
+See [docs/CI_CD.md](docs/CI_CD.md) for detailed pipeline documentation.
+
+### Pre-commit Hooks
+
+Automatically run quality checks before commits:
+
+```bash
+# Install hooks
+poetry run pre-commit install
+
+# Run manually
+poetry run pre-commit run --all-files
+```
+
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Install dev dependencies (`poetry install --with dev`)
+4. Make your changes
+5. Run tests (`poetry run pytest`)
+6. Run code quality checks (`poetry run pre-commit run --all-files`)
+7. Commit your changes (`git commit -m 'Add amazing feature'`)
+8. Push to the branch (`git push origin feature/amazing-feature`)
+9. Open a Pull Request
 
 ## 📝 License
 

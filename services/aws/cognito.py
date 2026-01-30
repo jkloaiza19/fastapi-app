@@ -175,7 +175,7 @@ class CognitoClient(CognitoClientInterface):
     def refresh_token(self, refresh_token_data: RefreshTokenRequest):
         try:
             response = self.__client.initiate_auth(
-                ClientId=settings.COGNITO_APP_CLIENT_ID,
+                ClientId=settings.COGNITO_CLIENT_ID,
                 AuthFlow="REFRESH_TOKEN_AUTH",
                 AuthParameters={
                     "REFRESH_TOKEN": refresh_token_data.refresh_token,
@@ -204,6 +204,13 @@ class CognitoClient(CognitoClientInterface):
             unverified_headers = jwt.get_unverified_headers(token)
             kid = unverified_headers["kid"]
             response = await self.get_cognito_public_keys()
+            
+            if kid not in response:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token key"
+                )
+            
             public_key = response[kid]
 
             if public_key:

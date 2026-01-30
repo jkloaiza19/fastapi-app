@@ -288,7 +288,105 @@ async def process(data: str):
     return {"task_id": task.id}
 ```
 
+## Code Quality Tools
+
+The project uses multiple tools to ensure code quality and security.
+
+### Development Dependencies
+
+Install all dev dependencies:
+```bash
+poetry install --with dev
+```
+
+**Included Tools:**
+- `black` - Code formatter (PEP 8 compliant)
+- `isort` - Import statement sorter
+- `flake8` - Linter and style checker
+- `mypy` - Static type checker
+- `pytest` - Testing framework
+- `pytest-asyncio` - Async test support
+- `pytest-cov` - Coverage reporting
+- `httpx` - Async HTTP client for tests
+- `bandit` - Security vulnerability scanner
+- `safety` - Dependency vulnerability checker
+- `pre-commit` - Git hook framework
+
+### Running Quality Checks
+
+```bash
+# Format code
+poetry run black .
+
+# Sort imports
+poetry run isort .
+
+# Lint code
+poetry run flake8 .
+
+# Type check
+poetry run mypy .
+
+# Security scan
+poetry run bandit -r . -x ./tests,./alembic
+
+# Check dependencies
+poetry run safety check
+
+# Run all checks
+poetry run pre-commit run --all-files
+```
+
+### Configuration Files
+
+- `.flake8` - Flake8 linting rules
+- `.pre-commit-config.yaml` - Pre-commit hook configuration
+- `pyproject.toml` - Tool configurations for Black, isort, mypy, pytest, coverage
+
+### Pre-commit Hooks
+
+Automatically run checks before each commit:
+
+```bash
+# Install hooks
+poetry run pre-commit install
+
+# Run manually on all files
+poetry run pre-commit run --all-files
+
+# Skip hooks (not recommended)
+git commit --no-verify -m "message"
+```
+
+**What runs on commit:**
+1. Trailing whitespace removal
+2. End-of-file fixing
+3. YAML/JSON/TOML validation
+4. Large file detection
+5. Black formatting
+6. isort import sorting
+7. flake8 linting
+8. mypy type checking
+9. Bandit security scanning
+
 ## Testing
+
+The project includes a comprehensive test suite with 32+ tests covering all major functionality.
+
+### Test Coverage
+
+**Test Files:**
+- `tests/test_main.py` - Application core (health check, rate limiting, CORS, 404s)
+- `tests/test_auth.py` - Authentication (API key validation, protected endpoints)
+- `tests/test_users.py` - User CRUD operations
+- `tests/test_ai.py` - AI service endpoints (chat completion, RAG)
+- `tests/test_ocr.py` - OCR processing (image extraction, passport parsing)
+- `tests/conftest.py` - Test fixtures and configuration
+
+**Current Results:**
+- 19/32 tests passing (59%)
+- Core functionality: 8/8 tests passing (100%)
+- See [TEST_RESULTS.md](../TEST_RESULTS.md) for detailed report
 
 ### Running Tests
 ```bash
@@ -299,67 +397,123 @@ poetry run pytest
 poetry run pytest --cov=. --cov-report=html
 
 # Run specific test file
-poetry run pytest tests/test_auth.py
+poetry run pytest tests/test_main.py -v
+
+# Run core tests (100% passing)
+poetry run pytest tests/test_main.py tests/test_auth.py -v
 
 # Run specific test
-poetry run pytest tests/test_auth.py::test_register_user
+poetry run pytest tests/test_auth.py::test_valid_api_key
 
 # Run with verbose output
 poetry run pytest -v
 
 # Run and stop on first failure
 poetry run pytest -x
+
+# Run with short traceback
+poetry run pytest --tb=short
 ```
 
+### Test Configuration
+
+Tests use the following services:
+- **PostgreSQL** - Test database (can be mocked)
+- **Redis** - Cache service (can be mocked)
+- **AsyncClient** - HTTP client for endpoint testing
+- **pytest-asyncio** - Async test support
+
 ### Writing Tests
+
+Follow the existing test patterns in the test suite:
 
 ```python
 # tests/test_my_feature.py
 import pytest
 from httpx import AsyncClient
-from main import app
 
 @pytest.mark.asyncio
-async def test_create_item():
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.post(
-            "/v1/my-feature/create",
-            json={"name": "test", "value": 42}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert data["name"] == "test"
-        assert data["value"] == 42
+async def test_create_item(client: AsyncClient):
+    """Test creating an item."""
+    response = await client.post(
+        "/v1/my-feature/create",
+        json={"name": "test", "value": 42}
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "test"
+    assert data["value"] == 42
 
 @pytest.mark.asyncio
-async def test_get_item_not_found():
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.get("/v1/my-feature/999")
-        assert response.status_code == 404
+async def test_get_item_not_found(client: AsyncClient):
+    """Test 404 for non-existent item."""
+    response = await client.get("/v1/my-feature/999")
+    assert response.status_code == 404
+
+@pytest.mark.asyncio
+async def test_protected_endpoint(client: AsyncClient, auth_headers: dict):
+    """Test API key authentication."""
+    # Without auth
+    response = await client.get("/v1/protected-endpoint")
+    assert response.status_code == 401
+    
+    # With auth
+    response = await client.get("/v1/protected-endpoint", headers=auth_headers)
+    assert response.status_code == 200
 ```
 
 ### Test Fixtures
 
-```python
-# tests/conftest.py
-import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+The `tests/conftest.py` file provides shared fixtures:
 
-@pytest.fixture
-async def db_session():
+```python
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create event loop for async tests."""
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+    loop.close()
+
+@pytest.fixture(scope="session")
+async def test_engine():
+    """Create test database engine."""
     engine = create_async_engine(
-        "postgresql+asyncpg://test:test@localhost/test_db"
-    )
-    async_session = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
+        TEST_DATABASE_URL,
+        echo=False,
+        poolclass=NullPool,
     )
     
-    async with async_session() as session:
-        yield session
+    # Setup tables
+    base_interface = get_declarative_base()
+    Base = base_interface.get_model_base()
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    
+    yield engine
+    
+    # Cleanup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     
     await engine.dispose()
+
+@pytest.fixture
+async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
+    """Create test HTTP client."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
+
+@pytest.fixture
+def auth_headers() -> dict:
+    """Provide authentication headers."""
+    return {"X-API-Key": "test-api-key-1"}
 ```
 
 ## Database Management

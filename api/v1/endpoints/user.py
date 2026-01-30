@@ -20,6 +20,10 @@ async def get_user(user_id: int, user_repository: user_repository_dep, redis_cli
     if user is None:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "User not found"})
 
+    # Handle both User object and dict from cache
+    if isinstance(user, dict):
+        return UserResponse(**user)
+    
     return UserResponse(
         id=user.id,
         username=user.username,

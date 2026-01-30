@@ -85,16 +85,15 @@ class HttpClient(HttpClientInterface, ABC):
     ) -> Any:
         """Sends a POST request with retries."""
         try:
-            async with self.async_client as http_client:
-                response = await http_client.post(
-                    url=url,
-                    json=data,
-                    headers={
-                        **self.common_headers,
-                        **custom_headers,
-                    }
-                )
-                return await self.handle_response(response)
+            response = await self.async_client.post(
+                url=url,
+                json=data,
+                headers={
+                    **self.common_headers,
+                    **custom_headers,
+                }
+            )
+            return await self.handle_response(response)
 
         except HTTPStatusError as e:
             logger.error(f"HTTP Status Error: {str(e)}")
