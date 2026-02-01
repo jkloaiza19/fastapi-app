@@ -39,6 +39,15 @@ class HttpClientInterface(ABC):
         pass
 
     @abstractmethod
+    async def post_multipart(
+            self,
+            url: str,
+            files: Dict[str, Any],
+            custom_headers: Optional[Dict[str, str]] = None,
+    ):
+        pass
+
+    @abstractmethod
     async def close(self):
         pass
 
@@ -128,6 +137,32 @@ class HttpClient(HttpClientInterface, ABC):
         # finally:
         #     if isinstance(self.async_client, AsyncClient):
         #         await self.async_client.aclose()
+
+    @RetryDecoratorWrapper.get_retry_decorator()
+    async def post_multipart(
+            self,
+            url: str,
+            files: Dict[str, Any],
+            custom_headers: Optional[Dict[str, str]] = None,
+    ) -> Any:
+        """Sends a POST request with multipart/form-data (for file uploads)."""
+        custom_headers = custom_headers or {}
+        # Don't set Content-Type for multipart - httpx handles this automatically
+        headers = {k: v for k, v in custom_headers.items() if k.lower() != 'content-type'}
+        
+        try:
+            response = await self.async_client.post(
+                url=url,
+                files=files,
+                headers=headers
+            )
+            return await self.handle_response(response)
+        except HTTPStatusError as e:
+            logger.error(f"HTTP Status Error in multipart request: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in multipart request: {str(e)}")
+            raise
 
     async def close(self):
         if isinstance(self.async_client, AsyncClient):
