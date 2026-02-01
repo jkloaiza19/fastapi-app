@@ -5,7 +5,7 @@ from typing import Optional
 class OpenAIPromptBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    prompt: str = Field(max_length=255)
+    prompt: str = Field(min_length=1, max_length=255)
     max_tokens: Optional[int] = Field(default=None)
 
 

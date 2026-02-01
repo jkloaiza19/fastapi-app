@@ -50,7 +50,7 @@ async def get_redis_client() -> AsyncGenerator[RedisClientInterface, None]:
         logger.error(f"Error in Redis client: {e}")
         raise e
     finally:
-        await client.redis_client.aclose()
+        await client._RedisClient__redis_client.aclose()
 
 
 redis_dep = Annotated[RedisClientInterface, Depends(get_redis_client)]

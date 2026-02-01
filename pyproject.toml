@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Fastapi project"
 authors = ["Juan Carlos <jkloaiza19@gmail.com>"]
 readme = "README.md"
-package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -20,7 +19,6 @@ rich = "^13.9.4"
 boto3 = "^1.35.54"
 sentry-sdk = "^2.22.0"
 python-jose = "^3.3.0"
-jose = "^1.0.0"
 python-multipart = "^0.0.17"
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 cryptography = "^43.0.3"
@@ -77,6 +75,74 @@ numpy = "^2.4.1"
 pymupdf = "^1.26.7"
 easyocr = "^1.7.2"
 
+[tool.poetry.group.dev.dependencies]
+black = "^24.1.0"
+flake8 = "^7.0.0"
+isort = "^5.13.2"
+mypy = "^1.8.0"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.23.3"
+bandit = "^1.7.6"
+safety = "^3.0.1"
+pre-commit = "^3.6.0"
+
+[tool.black]
+line-length = 127
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | \.eggs
+  | \.tox
+  | build
+  | dist
+  | alembic/versions
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 127
+skip_glob = ["alembic/versions/*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["alembic/versions", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/alembic/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    ".venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
 
 [build-system]
 requires = ["poetry-core"]

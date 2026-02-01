@@ -34,18 +34,22 @@ def is_running_in_docker():
 
 @dataclass
 class DataBaseEngine(DataBaseEngineInterface):
-    engine = create_async_engine(settings.ASYNC_DATABASE_URL_EXT)
+    _engine: AsyncEngine | None = None
 
     def get_engine(self) -> AsyncEngine:
-        return self.engine
+        if self._engine is None:
+            self._engine = create_async_engine(settings.ASYNC_DATABASE_URL_EXT)
+        return self._engine
 
 
 @dataclass
 class DeclarativeBase(DeclarativeBaseInterface):
-    base = declarative_base()
+    _base = None
 
     def get_model_base(self):
-        return self.base
+        if self._base is None:
+            self._base = declarative_base()
+        return self._base
 
 
 class DataBaseSessionMaker(DataBaseSessionMakerInterface):

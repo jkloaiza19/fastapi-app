@@ -46,12 +46,12 @@ def cognito_client(mock_boto_client, mock_http_client):
 
 
 def test_sign_up_success(cognito_client):
-    req = SignUpRequest(username="user", password="Password123!", email="user@test.com")
+    req = SignUpRequest(username="testuser", password="Password123!", email="user@test.com")
     assert cognito_client.sign_up(req) is True
 
 
 def test_sign_in_success(cognito_client):
-    req = SignInRequest(username="user", password="Password123!")
+    req = SignInRequest(username="testuser", password="Password123!")
     res = cognito_client.sign_in(req)
     assert res["access_token"] == "access_token"
 
@@ -89,14 +89,21 @@ async def test_get_current_user_success(cognito_client, mock_boto_client):
 @pytest.mark.asyncio
 async def test_verify_token_valid(cognito_client, monkeypatch):
     db = AsyncMock()
-    user = User(username="testuser")
+    user = User(username="testuser", email="test@example.com", is_confirmed=True)
     db.find_unique.return_value = user
 
-    token = jwt.encode({"username": "testuser", "aud": "clientid", "iss": "issuer"}, SECRET, algorithm=ALGO)
+    # Mock the JWT decode to return the payload directly
+    async def mock_get_keys():
+        return {"abc": "mock_public_key"}
+    
+    def mock_decode(token, key, algorithms, audience, issuer):
+        return {"username": "testuser", "aud": "clientid", "iss": "issuer"}
+    
     monkeypatch.setattr(jwt, "get_unverified_headers", lambda x: {"kid": "abc"})
-    monkeypatch.setattr(cognito_client, "get_cognito_public_keys", AsyncMock(return_value={"abc": SECRET}))
+    monkeypatch.setattr(cognito_client, "get_cognito_public_keys", mock_get_keys)
+    monkeypatch.setattr(jwt, "decode", mock_decode)
 
-    result = await cognito_client.verify_token(token, db=db)
+    result = await cognito_client.verify_token("mock.token.here", db=db)
     assert result["username"] == "testuser"
 
 

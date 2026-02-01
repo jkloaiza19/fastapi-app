@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional, Literal
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
 from fastapi.responses import JSONResponse
 
 from services.AI.ocr.ocr import OCRConfig, extract_text, extract_text_pdf
@@ -19,17 +19,17 @@ DocumentType = Literal["general", "passport"]
 @router.post("/extract")
 async def ocr_extract(
     file: UploadFile = File(...),
-    lang: str = Query("eng", description="Tesseract language codes (e.g., 'eng', 'spa', 'eng+spa')"),
-    psm: int = Query(6, ge=0, le=13, description="Page Segmentation Mode"),
-    oem: int = Query(3, ge=0, le=3, description="OCR Engine Mode"),
-    grayscale: bool = Query(True, description="Convert to grayscale"),
-    denoise: bool = Query(True, description="Apply denoising"),
-    threshold: bool = Query(True, description="Apply thresholding"),
-    resize_factor: float = Query(1.5, ge=0.5, le=4.0, description="Image resize factor"),
-    return_boxes: bool = Query(False, description="Return bounding boxes for detected text"),
-    return_pages: bool = Query(False, description="For PDFs, include per-page results"),
-    pdf_zoom: float = Query(2.0, ge=1.0, le=4.0, description="Rendering scale for PDFs (higher = sharper)"),
-    doc_type: DocumentType = Query("general", description="Document type: 'general' for any document, 'passport' for passport extraction")
+    lang: str = Form("eng", description="Tesseract language codes (e.g., 'eng', 'spa', 'eng+spa')"),
+    psm: int = Form(6, ge=0, le=13, description="Page Segmentation Mode"),
+    oem: int = Form(3, ge=0, le=3, description="OCR Engine Mode"),
+    grayscale: bool = Form(True, description="Convert to grayscale"),
+    denoise: bool = Form(True, description="Apply denoising"),
+    threshold: bool = Form(True, description="Apply thresholding"),
+    resize_factor: float = Form(1.5, ge=0.5, le=4.0, description="Image resize factor"),
+    return_boxes: bool = Form(False, description="Return bounding boxes for detected text"),
+    return_pages: bool = Form(False, description="For PDFs, include per-page results"),
+    pdf_zoom: float = Form(2.0, ge=1.0, le=4.0, description="Rendering scale for PDFs (higher = sharper)"),
+    doc_type: DocumentType = Form("general", description="Document type: 'general' for any document, 'passport' for passport extraction")
 ):
     """
     Extract text from images or PDFs using OCR.
