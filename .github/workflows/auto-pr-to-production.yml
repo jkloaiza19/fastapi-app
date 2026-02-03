@@ -1,0 +1,79 @@
+name: Auto PR to Production
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if production branch exists
+        id: check-production
+        run: |
+          if git ls-remote --heads origin production | grep -q production; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            if git ls-remote --heads origin main | grep -q main; then
+              echo "exists=true" >> $GITHUB_OUTPUT
+              echo "branch=main" >> $GITHUB_OUTPUT
+            else
+              echo "exists=false" >> $GITHUB_OUTPUT
+              echo "::warning::Production/main branch does not exist. Skipping PR creation."
+            fi
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-production.outputs.exists == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: staging
+          base: ${{ steps.check-production.outputs.branch || 'production' }}
+          title: "🚀 Auto-merge staging → production"
+          body: |
+            ## Automated PR from staging to production
+            
+            This PR was automatically created after changes were merged into `staging`.
+            
+            ### Recent Changes
+            - Merged PR: ${{ github.event.head_commit.message }}
+            - Commit: ${{ github.sha }}
+            - Author: @${{ github.actor }}
+            
+            ### Pre-Deployment Checklist
+            - [ ] All tests passing in staging
+            - [ ] Staging environment validated
+            - [ ] Breaking changes documented
+            - [ ] Database migrations reviewed
+            - [ ] Rollback plan prepared
+            - [ ] Team notified of deployment
+            
+            ### ⚠️ Production Deployment
+            Once merged, this will trigger deployment to the **PRODUCTION** environment.
+            
+            **Please ensure all checks are complete before merging!**
+            
+            ---
+            _Automated by GitHub Actions_
+          labels: |
+            production
+            auto-merge
+            deployment
+            critical
+          assignees: ${{ github.actor }}
+          draft: true  # Create as draft for production safety
+
+      - name: Comment on triggering commit
+        if: steps.check-production.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `✅ Auto-PR to production created as DRAFT!\n\nView the PR: ${{ github.server_url }}/${{ github.repository }}/pulls\n\n⚠️ Remember to review thoroughly before marking as ready and merging.`;
+            console.log(message);
