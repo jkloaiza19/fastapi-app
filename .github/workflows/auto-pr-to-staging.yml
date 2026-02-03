@@ -24,45 +24,61 @@ jobs:
             echo "::warning::Staging branch does not exist. Skipping PR creation."
           fi
 
-      - name: Create Pull Request
+      - name: Check if PR already exists
         if: steps.check-staging.outputs.exists == 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: develop
-          base: staging
-          title: "🚀 Auto-merge develop → staging"
-          body: |
-            ## Automated PR from develop to staging
-            
-            This PR was automatically created after changes were merged into `develop`.
-            
-            ### Recent Changes
-            - Merged PR: ${{ github.event.head_commit.message }}
-            - Commit: ${{ github.sha }}
-            - Author: @${{ github.actor }}
-            
-            ### Checklist
-            - [ ] All tests passing in develop
-            - [ ] Code review completed
-            - [ ] Ready to deploy to staging environment
-            
-            ### Deployment
-            Once merged, this will trigger deployment to the **staging** environment.
-            
-            ---
-            _Automated by GitHub Actions_
-          labels: |
-            staging
-            auto-merge
-            deployment
-          assignees: ${{ github.actor }}
-          draft: false
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING_PR=$(gh pr list --head develop --base staging --state open --json number --jq '.[0].number' || echo "")
+          if [ -n "$EXISTING_PR" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "number=$EXISTING_PR" >> $GITHUB_OUTPUT
+            echo "::notice::PR #$EXISTING_PR already exists from develop to staging"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Comment on triggering commit
-        if: steps.check-staging.outputs.exists == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const message = `✅ Auto-PR to staging created successfully!\n\nView the PR: ${{ github.server_url }}/${{ github.repository }}/pulls`;
-            console.log(message);
+      - name: Create Pull Request
+        if: steps.check-staging.outputs.exists == 'true' && steps.check-pr.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base staging \
+            --head develop \
+            --title "🚀 Auto-merge develop → staging" \
+            --body "## Automated PR from develop to staging
+
+          This PR was automatically created after changes were merged into \`develop\`.
+
+          ### Recent Changes
+          - Commit: \`${{ github.sha }}\`
+          - Author: @${{ github.actor }}
+          - Message: ${{ github.event.head_commit.message }}
+
+          ### Checklist
+          - [ ] All tests passing in develop
+          - [ ] Code review completed
+          - [ ] Ready to deploy to staging environment
+
+          ### Deployment
+          Once merged, this will trigger deployment to the **staging** environment.
+
+          ---
+          _Automated by GitHub Actions_" \
+            --label "staging,auto-merge,deployment" \
+            --assignee "${{ github.actor }}"
+
+      - name: Update existing PR
+        if: steps.check-staging.outputs.exists == 'true' && steps.check-pr.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ steps.check-pr.outputs.number }} --body "🔄 **New changes detected in develop branch**
+
+          - Commit: \`${{ github.sha }}\`
+          - Author: @${{ github.actor }}
+          - Message: ${{ github.event.head_commit.message }}
+
+          _Updated by GitHub Actions_"
