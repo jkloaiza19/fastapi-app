@@ -67,8 +67,13 @@ jobs:
 
           ---
           _Automated by GitHub Actions_" \
-            --label "staging,auto-merge,deployment" \
-            --assignee "${{ github.actor }}"
+            --assignee "${{ github.actor }}" || true
+          
+          # Add labels if they exist (ignore errors if they don't)
+          PR_NUMBER=$(gh pr list --head develop --base staging --state open --json number --jq '.[0].number')
+          gh pr edit "$PR_NUMBER" --add-label "staging" 2>/dev/null || echo "Label 'staging' not found, skipping"
+          gh pr edit "$PR_NUMBER" --add-label "auto-merge" 2>/dev/null || echo "Label 'auto-merge' not found, skipping"
+          gh pr edit "$PR_NUMBER" --add-label "deployment" 2>/dev/null || echo "Label 'deployment' not found, skipping"
 
       - name: Update existing PR
         if: steps.check-staging.outputs.exists == 'true' && steps.check-pr.outputs.exists == 'true'
