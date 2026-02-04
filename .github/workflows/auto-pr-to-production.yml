@@ -1,0 +1,103 @@
+name: Auto PR to Production
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if production branch exists
+        id: check-production
+        run: |
+          if git ls-remote --heads origin production | grep -q production; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "branch=production" >> $GITHUB_OUTPUT
+          elif git ls-remote --heads origin main | grep -q main; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "branch=main" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::Production/main branch does not exist. Skipping PR creation."
+          fi
+
+      - name: Check if PR already exists
+        if: steps.check-production.outputs.exists == 'true'
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE_BRANCH="${{ steps.check-production.outputs.branch }}"
+          EXISTING_PR=$(gh pr list --head staging --base "$BASE_BRANCH" --state open --json number --jq '.[0].number' || echo "")
+          if [ -n "$EXISTING_PR" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "number=$EXISTING_PR" >> $GITHUB_OUTPUT
+            echo "::notice::PR #$EXISTING_PR already exists from staging to $BASE_BRANCH"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-production.outputs.exists == 'true' && steps.check-pr.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base "${{ steps.check-production.outputs.branch }}" \
+            --head staging \
+            --title "🚀 Auto-merge staging → production" \
+            --body "## Automated PR from staging to production
+
+          This PR was automatically created after changes were merged into \`staging\`.
+
+          ### Recent Changes
+          - Commit: \`${{ github.sha }}\`
+          - Author: @${{ github.actor }}
+          - Message: ${{ github.event.head_commit.message }}
+
+          ### Pre-Deployment Checklist
+          - [ ] All tests passing in staging
+          - [ ] Staging environment validated
+          - [ ] Breaking changes documented
+          - [ ] Database migrations reviewed
+          - [ ] Rollback plan prepared
+          - [ ] Team notified of deployment
+
+          ### ⚠️ Production Deployment
+          Once merged, this will trigger deployment to the **PRODUCTION** environment.
+
+          **Please ensure all checks are complete before merging!**
+
+          ---
+          _Automated by GitHub Actions_" \
+            --assignee "${{ github.actor }}" \
+            --draft || true
+          
+          # Add labels if they exist (ignore errors if they don't)
+          PR_NUMBER=$(gh pr list --head staging --base "${{ steps.check-production.outputs.branch }}" --state open --json number --jq '.[0].number')
+          gh pr edit "$PR_NUMBER" --add-label "production" 2>/dev/null || echo "Label 'production' not found, skipping"
+          gh pr edit "$PR_NUMBER" --add-label "auto-merge" 2>/dev/null || echo "Label 'auto-merge' not found, skipping"
+          gh pr edit "$PR_NUMBER" --add-label "deployment" 2>/dev/null || echo "Label 'deployment' not found, skipping"
+          gh pr edit "$PR_NUMBER" --add-label "critical" 2>/dev/null || echo "Label 'critical' not found, skipping"
+
+      - name: Update existing PR
+        if: steps.check-production.outputs.exists == 'true' && steps.check-pr.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ steps.check-pr.outputs.number }} --body "🔄 **New changes detected in staging branch**
+
+          - Commit: \`${{ github.sha }}\`
+          - Author: @${{ github.actor }}
+          - Message: ${{ github.event.head_commit.message }}
+
+          ⚠️ **Please review changes carefully before marking as ready for production**
+
+          _Updated by GitHub Actions_"
