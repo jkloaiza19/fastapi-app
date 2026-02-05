@@ -30,16 +30,94 @@ class AskRequest(BaseModel):
 # async def chat_completion(body: ChatCompletionRequest, http_client: http_client_dep):
 #     return await get_chat_completion_http(http_client=http_client, prompt=body.prompt)
 
-@router.post("/chat-completion", status_code=200, response_model=ChatCompletionMessage)
+@router.post(
+    "/chat-completion",
+    status_code=200,
+    response_model=ChatCompletionMessage,
+    summary="Generate AI chat completion",
+    description="""Generate an AI response using OpenAI's chat completion API.
+    
+    **Uses GPT models** (GPT-4, GPT-3.5-turbo, etc.) to generate intelligent responses
+    based on the provided prompt.
+    
+    **Request body:**
+    - `prompt`: The message or question to send to the AI
+    
+    **Returns:** AI-generated response message with:
+    - `content`: The AI's text response
+    - `role`: Message role (assistant)
+    - Additional metadata from OpenAI
+    
+    **Use cases:**
+    - Chatbots and conversational AI
+    - Content generation
+    - Question answering
+    - Text analysis and summarization
+    """,
+)
 async def chat_completion(body: ChatCompletionRequest, chat_completion_client: chat_completion_dep):
     return await chat_completion_client.get_model_response(prompt=body.prompt)
 
-@router.post("/run-sync", status_code=200)
+@router.post(
+    "/run-sync",
+    status_code=200,
+    summary="Sync data from Notion",
+    description="""Synchronize data from Notion workspace to the local database.
+    
+    **Authentication Required:** X-API-Key header
+    
+    This endpoint:
+    - Fetches latest data from configured Notion databases
+    - Processes and indexes content for RAG (Retrieval-Augmented Generation)
+    - Updates the local knowledge base
+    - Runs asynchronously in background thread
+    
+    **Use this** before running RAG queries to ensure up-to-date information.
+    
+    **Note:** This operation may take several seconds to minutes depending on
+    the amount of data in your Notion workspace.
+    """,
+    responses={
+        200: {"description": "Sync initiated successfully"},
+        401: {"description": "X-API-Key header required"},
+        403: {"description": "Invalid API key"}
+    }
+)
 @api_key_required
 async def run_sync_endpoint(request: Request):
     return await run_sync_threaded()
 
-@router.post("/rag/ask")
+@router.post(
+    "/rag/ask",
+    summary="Ask a question using RAG",
+    description="""Answer questions using Retrieval-Augmented Generation (RAG).
+    
+    **Authentication Required:** X-API-Key header
+    
+    **How it works:**
+    1. Searches your indexed knowledge base (from Notion sync)
+    2. Retrieves relevant document chunks
+    3. Uses AI to generate accurate answers based on retrieved context
+    
+    **Features:**
+    - Response caching for identical questions (improves performance)
+    - Semantic search for better context matching
+    - Source attribution in responses
+    
+    **Request body:**
+    - `question`: Your question (minimum 1 character)
+    
+    **Returns:** Relevant documents and context that can answer your question.
+    
+    **Note:** Run `/run-sync` first to populate the knowledge base.
+    """,
+    responses={
+        200: {"description": "Relevant documents retrieved"},
+        401: {"description": "X-API-Key header required"},
+        403: {"description": "Invalid API key"},
+        404: {"description": "No relevant documents found. Run /run-sync to index data first."}
+    }
+)
 @api_key_required
 async def ask(req: AskRequest, request: Request, redis=redis_dep):
     cached = await redis.get_cached_data("ask", req.question)
