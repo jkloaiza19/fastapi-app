@@ -20,7 +20,23 @@ router = APIRouter()
 limiter = get_limiter()
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    summary="Register a new user",
+    description="""Register a new user account and send a confirmation email.
+    
+    **Rate limited to 5 requests per hour per IP address.**
+    
+    The endpoint will:
+    - Create a new user in AWS Cognito
+    - Store user information in the database
+    - Send a confirmation email with verification link
+    - Return user details upon successful registration
+    
+    The user must confirm their email before they can sign in.
+    """,
+)
 @limiter.limit("5/hour")
 async def signup(
         auth: auth_dependency,
@@ -43,7 +59,27 @@ async def signup(
     )
 
 
-@router.get("/confirm_user/{token}", status_code=status.HTTP_200_OK, response_model=TokenResponse)
+@router.get(
+    "/confirm_user/{token}",
+    status_code=status.HTTP_200_OK,
+    response_model=TokenResponse,
+    summary="Confirm user email",
+    description="""Confirm a user's email address using the token sent via email.
+    
+    This endpoint:
+    - Validates the confirmation token
+    - Activates the user account in AWS Cognito
+    - Marks the user as confirmed in the database
+    - Returns authentication tokens (access token, refresh token, ID token)
+    
+    After confirmation, the user can sign in with their credentials.
+    """,
+    responses={
+        200: {"description": "Email confirmed successfully. Returns authentication tokens."},
+        400: {"description": "Invalid or expired token"},
+        404: {"description": "User not found"}
+    }
+)
 async def confirm_user(
         token: str,
         auth: auth_dependency,
@@ -61,7 +97,30 @@ async def confirm_user(
     )
 
 
-@router.post("/signin", status_code=status.HTTP_200_OK)
+@router.post(
+    "/signin",
+    status_code=status.HTTP_200_OK,
+    summary="Sign in user",
+    description="""Authenticate a user and return access tokens.
+    
+    **Requirements:**
+    - User must have confirmed their email address
+    - Valid email and password required
+    
+    **Returns:**
+    - Access token (JWT) - Use for authenticating API requests
+    - Refresh token - Use to obtain new access tokens
+    - ID token - Contains user claims and profile information
+    - Expires in - Token expiration time in seconds
+    
+    Use the access token in the Authorization header: `Bearer <access_token>`
+    """,
+    responses={
+        200: {"description": "Successfully authenticated. Returns authentication tokens."},
+        401: {"description": "Invalid credentials or unconfirmed email"},
+        404: {"description": "User not found"}
+    }
+)
 async def signin(
         auth: auth_dependency,
         user: SignInRequest,
@@ -73,7 +132,29 @@ async def signin(
     )
 
 
-@router.get("/get_user", status_code=status.HTTP_200_OK)
+@router.get(
+    "/get_user",
+    status_code=status.HTTP_200_OK,
+    summary="Get current authenticated user",
+    description="""Retrieve the currently authenticated user's profile information.
+    
+    **Authentication Required:** Bearer token in Authorization header
+    
+    Returns complete user profile including:
+    - User ID and username
+    - Email address
+    - Account status (confirmed/unconfirmed)
+    - Account creation and update timestamps
+    - Cognito user attributes
+    
+    The user information is extracted from the validated JWT token.
+    """,
+    responses={
+        200: {"description": "User profile retrieved successfully"},
+        401: {"description": "Unauthorized - Invalid or missing token"},
+        404: {"description": "User not found"}
+    }
+)
 @token_required
 async def get_user(
         request: Request,
