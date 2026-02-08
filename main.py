@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.openapi.utils import get_openapi
 # from fastapi.websockets import WebSocket
 import sentry_sdk
 from slowapi import Limiter
@@ -102,6 +103,52 @@ app.state.limiter = limiter
 templates = Jinja2Templates(directory="api/templates")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# Custom OpenAPI schema with multiple security schemes
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="FastAPI Application",
+        version="1.0.0",
+        description="API with multiple authentication methods",
+        routes=app.routes,
+    )
+    
+    # Add security schemes
+    openapi_schema["components"]["securitySchemes"] = {
+        "HTTPBasic": {
+            "type": "http",
+            "scheme": "basic",
+            "description": "HTTP Basic Authentication (username and password)"
+        },
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API Key authentication using X-API-Key header"
+        },
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Bearer token authentication (JWT)"
+        }
+    }
+    
+    # Apply security globally (optional - can be overridden per endpoint)
+    # openapi_schema["security"] = [
+    #     {"HTTPBasic": []},
+    #     {"ApiKeyAuth": []}
+    # ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 # Middlewares
 app.middleware(RequestLoggingMiddleware)

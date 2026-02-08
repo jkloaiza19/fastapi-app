@@ -13,7 +13,27 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.get("/{user_id}", status_code=status.HTTP_200_OK)
+@router.get(
+    "/{user_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Get user by ID",
+    description="""Retrieve a specific user's profile by their user ID.
+    
+    **Features:**
+    - Response cached for 5 minutes (300 seconds)
+    - Returns complete user profile
+    
+    **Returns:**
+    - User ID, username, and email
+    - Account confirmation status
+    - Created and updated timestamps
+    """,
+    response_model=UserResponse,
+    responses={
+        200: {"description": "User found and returned"},
+        404: {"description": "User not found"}
+    }
+)
 @request_cache_response(ttl=300)
 async def get_user(user_id: int, user_repository: user_repository_dep, redis_client: redis_dep):
     user = await user_repository.find_unique(redis=None, id=user_id)
@@ -34,7 +54,27 @@ async def get_user(user_id: int, user_repository: user_repository_dep, redis_cli
     )
 
 
-@router.post("/create", status_code=status.HTTP_201_CREATED, response_model=Dict)
+@router.post(
+    "/create",
+    status_code=status.HTTP_201_CREATED,
+    response_model=Dict,
+    summary="Create a new user",
+    description="""Create a new user record in the database.
+    
+    **Note:** This is a direct database operation. For standard user registration
+    with email confirmation, use the `/auth/register` endpoint instead.
+    
+    **Required fields:**
+    - username: Unique username
+    - email: Valid email address
+    - password: User password
+    """,
+    responses={
+        201: {"description": "User created successfully"},
+        400: {"description": "Invalid user data or duplicate username/email"},
+        500: {"description": "Database error"}
+    }
+)
 async def create_user(user: UserRequest, user_repository: user_repository_dep, redis: redis_dep):
     logger.debug(f"user: {user.dict()}")
     return await user_repository.create_one(user)
